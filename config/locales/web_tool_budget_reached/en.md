@@ -1,0 +1,1 @@
+Web search budget reached: this agent may call web_search at most {{ limit }} consecutive times. Do not retry web_search; summarize the existing evidence, or report the remaining information gap and ask the main thread to narrow the scope.

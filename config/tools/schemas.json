@@ -1,0 +1,678 @@
+{
+  "ask_user": {
+    "name": "ask_user",
+    "description": "Pause the agent and request user input or confirmation. Use ppt_mode.confirm_params to collect PPT parameters, and ppt_mode.confirm_outline to request confirmation of a generated PPT outline.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "ask_type": {
+          "type": "string",
+          "description": "Ask user type for the Web UI.",
+          "enum": [
+            "select_mode",
+            "ppt_mode.confirm_params",
+            "ppt_mode.confirm_outline"
+          ]
+        },
+        "questions": {
+          "type": "array",
+          "description": "Optional clarification questions to show in the Web UI (up to 3). Omit this for specialized PPT confirmations.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Stable question identifier."
+              },
+              "question": {
+                "type": "string",
+                "description": "Question shown to the user."
+              },
+              "allow_free_text": {
+                "type": "boolean",
+                "description": "Whether the user may provide a free-text answer."
+              },
+              "options": {
+                "type": "array",
+                "description": "Recommended options, at least 2, at most 2-4",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "description": "Short option label."
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "Short description for the option."
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "description"
+                  ]
+                }
+              },
+              "multi_select": {
+                "type": "boolean",
+                "description": "Whether this question allows selecting multiple options. Defaults to false (single choice)."
+              }
+            },
+            "required": [
+              "id",
+              "question"
+            ]
+          }
+        }
+      },
+      "required": [
+        "ask_type"
+      ]
+    }
+  },
+  "bash": {
+    "name": "bash",
+    "description": "Run a shell command inside the backend sandbox environment. The sandbox cannot directly access the external internet; do not use this tool for curl/wget/git clone/pip install or other network retrieval.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Shell command to execute."
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Optional timeout in seconds (5-600, default 120). For long-running commands, pass a larger timeout so the process is not killed early."
+        }
+      },
+      "required": [
+        "command"
+      ]
+    }
+  },
+  "create_subtask": {
+    "name": "create_subtask",
+    "description": "Delegate an independent subtask to a specialized subtask agent.\n\nUse this tool when the subtask meets ANY of these criteria:\n- **Deep exploration**: Requires multiple search/read/code steps (e.g., \"Research X and summarize findings\")\n- **Independent workflow**: Has clear input/output, can be completed without main context (e.g., \"Parse file Y and extract Z\")\n- **Context pollution prevention**: Would generate verbose logs/intermediate data that clutters main conversation\n- **Information gathering**: Involves collecting/extracting/organizing data (default to subtask unless trivial)\n- **Parallel execution**: Multiple independent subtasks can be dispatched in one turn (Fan-out/Fan-in)\n\nPrefer using subtasks for:\n- Fact gathering, source verification, dimension-by-dimension comparison, evidence extraction\n- Independent local analysis that feeds into a later main-thread synthesis\n\nDo NOT use for:\n- Simple single-tool operations (one search, one file read)\n- Tasks requiring main context or user interaction\n- Tasks that need to create further subtasks (subtask agent cannot nest)\n- Writing the full final plan/report/article/recommendation/answer that integrates multiple work packages\n\nKeep title / goal / todo in plain user-facing language; route internal references (paths, schema/field/artifact names) through relevant_files / criteria / addition. When a delegate may benefit from a skill, register it via the separate `skill` parameter using skill registry names only; do not embed skill content or paths into any field.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Short, user-facing title for the subtask. Plain natural language only. Must not contain file names, file paths, schema or field names, internal artifact names, slot ids, stage labels, prompt/template names, or any tool / function / script / skill name. Any such internal reference required for the delegate must instead be supplied via relevant_files / criteria / addition."
+        },
+        "goal": {
+          "type": "string",
+          "description": "What the subtask should accomplish, written the way the end user would describe it. Plain user-facing language only. Do not include file names, file paths, schema or field names, internal artifact names, slot ids, stage labels, prompt/template names, or tool / function / script / skill names. Even if surrounding skill text uses such terms heavily, translate them here and route the precise internal references through relevant_files / criteria / addition."
+        },
+        "todo": {
+          "type": "string",
+          "description": "Concrete task items or checklist steps for the delegate, in plain user-facing language. If the skill argument is set, include a first checklist item telling the delegate to read the registered skill instructions before starting. Only the work itself. Do not include output format / schema / citation / table / quality / delivery / file-path / result-return requirements; put those in criteria. Do not include file names, file paths, schema or field names, internal artifact names, slot ids, stage labels, prompt/template names, or tool / function / script / skill names; route those through relevant_files / criteria / addition. If a file must appear here, use only a plain user-facing title and map that title to its real path in relevant_files. Do not copy internal terms from surrounding skill or SOP text; translate them."
+        },
+        "relevant_files": {
+          "type": "string",
+          "default": "",
+          "description": "Optional. Mapping of plain user-facing file titles to actual file paths the delegate needs. This is an internal hand-off channel; real paths and internal artifact names are allowed here and should be moved here whenever they would otherwise leak into title / goal / todo."
+        },
+        "criteria": {
+          "type": "string",
+          "default": "",
+          "description": "Optional. Acceptance criteria, output format / schema / field requirements, citation/source requirements, table requirements, quality bar, final delivery instructions, file paths, and result-return instructions. This is an internal hand-off channel; schema names, field names, artifact names, and exact paths are allowed here and should be moved here rather than written into title / goal / todo."
+        },
+        "skill": {
+          "type": "string",
+          "default": "",
+          "description": "Optional. One or more skill names to register for the delegate, separated by newlines or commas. Use skill registry names only; do not include skill content or paths."
+        },
+        "addition": {
+          "type": "string",
+          "default": "",
+          "description": "Optional. Any supplementary information the delegate should know, including internal artifact names, slot ids, stage references, pipeline details, or other implementation context that must not appear in title / goal / todo. Route such terms here."
+        }
+      },
+      "required": [
+        "title",
+        "goal",
+        "todo"
+      ]
+    }
+  },
+  "document_parser": {
+    "name": "document_parser",
+    "description": "Parse a document file into structured text or table content.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Path of the document to parse."
+        }
+      },
+      "required": [
+        "file_path"
+      ]
+    }
+  },
+  "edit_file": {
+    "name": "edit_file",
+    "description": "Edit a file by replacing exact text content. CRITICAL PRECONDITION: You MUST call the 'read_file' tool to read the contents of this target file earlier in the current conversation before calling this tool. If you have not read the file content first, this tool will reject the operation and return an error. Finds old_text and replaces it with new_text.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "The path to the file to edit. MUST strictly start with 'local://' or 'memory://'. Remember: You must have already read this file in a previous step of this conversation."
+        },
+        "old_text": {
+          "type": "string",
+          "description": "The exact text snippet to find in the file. MUST match perfectly, including all whitespaces, indentation, and newlines."
+        },
+        "new_text": {
+          "type": "string",
+          "description": "The new replacement text to write. Can be an empty string to delete the matched old_text."
+        },
+        "replace_all": {
+          "type": "boolean",
+          "description": "Optional. If true, replaces all occurrences of old_text. If false or omitted, replaces only the first occurrence. Default is false."
+        }
+      },
+      "required": [
+        "file_path",
+        "old_text",
+        "new_text"
+      ]
+    }
+  },
+  "execute_code": {
+    "name": "execute_code",
+    "description": "Execute Python code in the sandbox environment. The sandbox cannot directly access the external internet; do not use this tool for requests/urllib/pip install or other network retrieval.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "The code to be executed."
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Optional timeout in seconds (5-600, default 300). For long-running tasks (waiting on background processes, polling loops, batch generation), pass a larger timeout so the script is not killed early."
+        }
+      },
+      "required": [
+        "code"
+      ]
+    }
+  },
+  "fetch_url": {
+    "name": "fetch_url",
+    "description": "Fetch a URL and return the relevant page or file content.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "URL to fetch."
+        },
+        "query": {
+          "type": "string",
+          "description": "Query to guide content summarization if content exceeds 1000 characters."
+        }
+      },
+      "required": [
+        "url",
+        "query"
+      ]
+    }
+  },
+  "get_current_time": {
+    "name": "get_current_time",
+    "description": "获取当前日期和时间。当你需要知道当前的具体日期、时间、星期几或时区时调用此工具。",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  "glob": {
+    "name": "glob",
+    "description": "Find files by glob pattern under the local workspace or the bundled read-only skills directory. memory:// and knowledge:// are not implemented by this local runtime.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Glob pattern to match files, e.g. '**/*.py' or 'src/**/*.json'."
+        },
+        "path": {
+          "type": "string",
+          "description": "Directory to search in. Omit to use the workspace. Otherwise use local://. Workspace paths may be relative (for example local://reports); bundled skills use the production-compatible local:///skills/<skill> form. The skills directory is read-only. Do not use memory:// or knowledge://."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of file paths to return. Default is 100."
+        },
+        "offset": {
+          "type": "integer",
+          "description": "Skip the first N matching file paths. Default is 0."
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    }
+  },
+  "html_to_png": {
+    "name": "html_to_png",
+    "description": "Render HTML to a PNG image using local headless Chrome. Two modes: file mode (html_file_path -> PNG at result_image_path) and stateless mode (mode=stateless + html_file_content -> returns png_base64, no file written).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "Optional. 'stateless' renders the html_file_content string and returns png_base64 (no sandbox file touched). Omit for file mode."
+        },
+        "html_file_path": {
+          "type": "string",
+          "description": "Absolute path of the source HTML file. Required in file mode."
+        },
+        "html_file_content": {
+          "type": "string",
+          "description": "Full HTML string to render. Required in stateless mode. Images must already be inline (data: URLs) since stateless mode cannot read sandbox files."
+        },
+        "result_image_path": {
+          "type": "string",
+          "description": "Optional output PNG path (file mode). Defaults to <html>.png next to the source file."
+        },
+        "viewport_width": {
+          "type": "integer",
+          "description": "Optional viewport width in px, default 1600."
+        },
+        "viewport_height": {
+          "type": "integer",
+          "description": "Optional viewport height in px, default 900."
+        }
+      }
+    }
+  },
+  "image_generate": {
+    "name": "image_generate",
+    "description": "Generate a brand-new image from a text prompt (text-to-image). Supports style and image_size. This provider (SenseNova U1 Fast) does NOT support image-to-image: do not pass image_paths; for reference-based assets use image_search.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "image_paths": {
+          "description": "NOT SUPPORTED by current provider (SenseNova U1 Fast, text-to-image only). Do not pass this parameter; use image_search for reference-based assets.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "image_size": {
+          "description": "Optional requested size (e.g. 1024x1024). The provider maps it to its nearest fixed 2K resolution (1:1 -> 2048x2048, default 16:9 -> 2752x1536).",
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Image generation prompt."
+        },
+        "result_image_path": {
+          "type": "string",
+          "description": "Optional output sandbox path for the generated image."
+        },
+        "style": {
+          "type": "string",
+          "description": "Optional style description appended to the prompt."
+        }
+      },
+      "required": [
+        "prompt"
+      ]
+    }
+  },
+  "image_search": {
+    "name": "image_search",
+    "description": "Search images by keyword and return downloadable sandbox-ready results with source metadata.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Image search keyword or short phrase."
+        },
+        "result_image_path": {
+          "type": "string",
+          "description": "Optional output sandbox path for downloaded images."
+        },
+        "top_k": {
+          "type": "integer",
+          "description": "Maximum number of images to return. Range 1-10, default 5."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  "image_vqa": {
+    "name": "image_vqa",
+    "description": "Analyze an image and answer a question based on visible content.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "image_path": {
+          "type": "string",
+          "description": "Path or URL of the image to analyze."
+        },
+        "query": {
+          "type": "string",
+          "description": "Question about the image."
+        }
+      },
+      "required": [
+        "image_path",
+        "query"
+      ]
+    }
+  },
+  "knowledge_download": {
+    "name": "knowledge_download",
+    "description": "Downloads specific files from the knowledge base into the local sandbox environment for detailed processing or reading.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "description": "A list of target file paths to download. CRITICAL: Every single path MUST strictly start with the 'knowledge://' protocol prefix (e.g., 'knowledge://folder/file.pdf').",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "paths"
+      ]
+    }
+  },
+  "knowledge_retrieve": {
+    "name": "knowledge_retrieve",
+    "description": "Retrieves relevant knowledge chunks or information from the knowledge base based on a natural language query or keywords.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search query, question, or key phrases used to find relevant information in the knowledge base."
+        },
+        "path": {
+          "type": "string",
+          "description": "Path scope in the form knowledge://<scope>/<subpath>. retrieve only searches within this path."
+        }
+      },
+      "required": [
+        "query",
+        "path"
+      ]
+    }
+  },
+  "list_todos": {
+    "name": "list_todos",
+    "description": "查询指定日期的待办事项列表。返回该日期的所有待办事项，包含待办、已完成等状态。注意参数date为'今天'或'Today'时请转为具体日期再查询。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "description": "日期，格式为yyyy-MM-dd。输入'today'或'今天'时自动转为当天日期。"
+        }
+      },
+      "required": [
+        "date"
+      ]
+    }
+  },
+  "memory_search": {
+    "name": "memory_search",
+    "description": "Retrieve relevant memories from the memory system, including historical session summaries and Q&A records. Use it when the user references past projects, prior plans, or personal preferences.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Query used to retrieve relevant memories. Extract key entities and intent from the user's question."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  "read_file": {
+    "name": "read_file",
+    "description": "Read a text file from the local workspace or bundled read-only skills. Use local:// for workspace files and local:///skills/<skill>/... for Skill files. memory:// and knowledge:// are not implemented by this local runtime and must not be used.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Path to read. It MUST start with local://. Use local:///skills/<skill>/... for bundled Skill files. Do not use memory:// or knowledge:// with this backend."
+        },
+        "offset": {
+          "type": "integer",
+          "description": "Optional line number to start reading from (0-indexed)."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Optional number of lines to read. Default is 2000."
+        }
+      },
+      "required": [
+        "file_path"
+      ]
+    }
+  },
+  "reflection": {
+    "name": "reflection",
+    "description": "Trigger reflection mode.\n\nUse this tool when:\n- Subtasks have just been completed and you want to verify the provisional conclusion before moving on\n- You want to check missing evidence, risks, or contradictions in the subtask outcome",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Brief topic or label for this reflection (e.g. 'evidence completeness check')."
+        },
+        "focus": {
+          "type": "string",
+          "description": "Optional reflection focus or checklist to prioritize. Describe what specifically to check, verify, or critique."
+        }
+      }
+    }
+  },
+  "todolist_append": {
+    "name": "todolist_append",
+    "description": "Append new tasks to the end of an existing approved checklist.\n\nRules:\n- Can only be used when there's already an existing approved todolist.\n- Cannot be used to bootstrap the first plan (use todolist_create instead).\n- This is an exclusive turn operation: no other tools will execute in the same round when waiting for user input.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "todo_list": {
+          "type": "array",
+          "description": "Task descriptions to append to the existing checklist. Each item must be a specific but concise natural-language milestone or outcome. Do not write only a few words or generic labels such as research, analyze, organize, draft report, or finish task. Use this shape: verb + object/scope + expected output + completion criteria. Do not mention file names, file extensions, paths, working directories, tool/function/skill names, commands, JSON/schema fields, ids, request ids, protocol fields, or internal artifact names.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "task_id": {
+                "type": "integer",
+                "description": "Numeric task ID, should follow the last existing task ID in the checklist."
+              },
+              "description": {
+                "type": "string",
+                "description": "Task description. Must be a specific but concise natural-language milestone or outcome. Do not write only a few words or generic labels such as research, analyze, organize, draft report, or finish task. Use this shape: verb + object/scope + expected output + completion criteria."
+              }
+            },
+            "required": [
+              "task_id",
+              "description"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "todo_list"
+      ]
+    }
+  },
+  "todolist_create": {
+    "name": "todolist_create",
+    "description": "Create and persist the canonical todolist for the requested date. A successful result (ok=true) means the checklist has already been saved and the operation is complete.\n\nRules:\n- Must submit the full replacement checklist at once; do NOT append one task at a time.\n- Treat this as a structured task-state operation, not a general file creation operation: do NOT announce a <file_action> path for it.\n- After success, do NOT call read_file, write_file, or edit_file to verify, mirror, export, or duplicate the same checklist unless the user explicitly asks for a separate exported document.\n- The result path returned by this tool is the only canonical persisted checklist path.\n- This is an exclusive turn operation: no other tools should execute in the same round.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "todo_list": {
+          "type": "array",
+          "description": "Ordered task descriptions, at least 1 item. Each item must be a specific but concise natural-language milestone or outcome. Do not write only a few words or generic labels such as research, analyze, organize, draft report, or finish task. Use this shape: verb + object/scope + expected output + completion criteria. Do not mention file names, file extensions, paths, working directories, tool/function/skill names, commands, JSON/schema fields, ids, request ids, protocol fields, or internal artifact names.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "task_id": {
+                "type": "integer",
+                "description": "Numeric task ID, starting from 1 and incrementing sequentially."
+              },
+              "description": {
+                "type": "string",
+                "description": "Task description. Must be a specific but concise natural-language milestone or outcome. Do not write only a few words or generic labels such as research, analyze, organize, draft report, or finish task. Use this shape: verb + object/scope + expected output + completion criteria."
+              }
+            },
+            "required": [
+              "task_id",
+              "description"
+            ]
+          },
+          "minItems": 1
+        },
+        "date": {
+          "type": "string",
+          "description": "目标日期，格式为 yyyy-MM-dd。如果用户说'今天'或'明天'请转为具体日期再传入。不传则默认使用今天。"
+        }
+      },
+      "required": [
+        "todo_list"
+      ]
+    }
+  },
+  "todolist_update": {
+    "name": "todolist_update",
+    "description": "Edit or finish one or more existing tasks in the approved checklist.\n\nActions:\n- edit: Changes the task description and resets status to `pending`, clears previous result.\n- finish: Marks task as `complete` and stores the result text.\n\nRules:\n- Always pass updates in the `updates` array, even for a single task.\n- If multiple tasks need status/result/description changes in one turn, batch them into one todolist_update call.\n- This is an exclusive turn operation: no other tools will execute in the same round when waiting for user input.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "updates": {
+          "type": "array",
+          "description": "Batch task updates. Single-task updates must also be wrapped inside this array. If multiple tasks need changes in one turn, include all of them here and call todolist_update only once.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "task_id": {
+                "type": "integer",
+                "description": "Target task ID (1-indexed)."
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "edit",
+                  "finish"
+                ],
+                "description": "Operation type: edit or finish."
+              },
+              "description": {
+                "type": "string",
+                "description": "[Required for edit action] New task description. Must be a specific but concise natural-language milestone or outcome. Do not write only a few words or generic labels such as research, analyze, organize, draft report, or finish task. Use this shape: verb + object/scope + expected output + completion criteria."
+              },
+              "result": {
+                "type": "string",
+                "description": "[Required for finish action] Task completion result summary. Must be a specific but concise natural-language outcome with expected output and completion criteria, not a generic label or a few words."
+              }
+            },
+            "required": [
+              "task_id",
+              "action"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "action": {
+                      "const": "edit"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "description"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "action": {
+                      "const": "finish"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "result"
+                  ]
+                }
+              }
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "updates"
+      ]
+    }
+  },
+  "web_search": {
+    "name": "web_search",
+    "description": "Discovery-only web search: returns candidate links/snippets; use fetch_url for full-page evidence.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Single-intent compact keyword query (2-6 keywords). Either provide 'query' (single) or 'queries' (batch). When answers need multiple independent topics, use 'queries' to batch them in one call."
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Batch mode (optional): pass 2-6 independent single-intent keyword queries to search them ALL in parallel within one tool call; each query returns its own candidate list. Prefer this over issuing multiple single-query calls when you have several independent queries at once. Ignore when using 'query'."
+        }
+      },
+      "required": []
+    }
+  },
+  "write_file": {
+    "name": "write_file",
+    "description": "Write a local workspace file. This tool creates a new file or completely overwrites an existing file. Use a workspace-relative path or local:// path. Do not use memory:// or knowledge://. Use edit_file for incremental changes.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Path to write. It MUST start with 'local://'. memory:// and knowledge:// are not supported by this backend."
+        },
+        "content": {
+          "type": "string",
+          "description": "Content to write to the file. Can be empty string to create an empty file."
+        }
+      },
+      "required": [
+        "file_path",
+        "content"
+      ]
+    }
+  }
+}

@@ -1,0 +1,27 @@
+﻿# Auto detect text files and perform LF normalization
+* text=auto
+
+# PowerShell files
+*.ps1 text eol=crlf
+
+# Python files
+*.py text eol=crlf
+
+# HTML/CSS/JS
+*.html text eol=crlf
+*.css text eol=crlf
+*.js text eol=crlf
+
+# Markdown
+*.md text eol=crlf
+
+# JSON/YAML
+*.json text eol=crlf
+*.yml text eol=crlf
+
+# Binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.pdf binary

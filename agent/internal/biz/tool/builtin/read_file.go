@@ -1,0 +1,100 @@
+package builtin
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"unicode/utf8"
+)
+
+func NewLocalReadFileTool(schema ToolDef) Tool {
+	return NewLocalReadFileToolWithConfig(schema, ReadFileToolConfig{})
+}
+
+func NewLocalReadFileToolWithConfig(schema ToolDef, settings ReadFileToolConfig) Tool {
+	return newLocalStructuredTool("read_file", schema, func(ctx context.Context, invocation ToolInvocation) (ToolResult, error) {
+		if err := ctx.Err(); err != nil {
+			return ToolResult{}, err
+		}
+		args, err := decodeLocalToolArgs(invocation)
+		if err != nil {
+			return localErrorResult("read_file", err), nil
+		}
+		filePath := localStringArg(args, "file_path", "path")
+		if filePath == "" {
+			return localErrorResult("read_file", fmt.Errorf("file_path is required")), nil
+		}
+		localContext, err := localToolContext(invocation)
+		if err != nil {
+			return localErrorResult("read_file", err), nil
+		}
+		fullPath, root, err := resolveLocalReadablePath(localContext.Workspace, settings.SkillsRoot, filePath)
+		if err != nil {
+			return localErrorResult("read_file", err), nil
+		}
+		info, err := os.Stat(fullPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return localErrorResult("read_file", fmt.Errorf("file not found: %s", fullPath)), nil
+			}
+			return localErrorResult("read_file", fmt.Errorf("stat error: %w", err)), nil
+		}
+		if info.IsDir() {
+			return localErrorResult("read_file", fmt.Errorf("path is a directory: %s", fullPath)), nil
+		}
+		if settings.MaxReadFileSizeBytes > 0 && info.Size() > settings.MaxReadFileSizeBytes {
+			return localErrorResult("read_file", fmt.Errorf("file exceeds configured maximum size of %d bytes: %s", settings.MaxReadFileSizeBytes, fullPath)), nil
+		}
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			return localErrorResult("read_file", fmt.Errorf("read error: %w", err)), nil
+		}
+
+		lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+		totalLines := len(lines)
+		offset := localIntArg(args, "offset", 0)
+		if offset < 0 {
+			offset = 0
+		}
+		limit := localIntArg(args, "limit", 0)
+		maxBytes := localIntArg(args, "max_bytes", 0)
+		if limit <= 0 && maxBytes <= 0 {
+			limit = 2000
+		}
+		if offset > totalLines {
+			offset = totalLines
+		}
+		endLine := totalLines
+		if limit > 0 && offset+limit < endLine {
+			endLine = offset + limit
+		}
+		selected := lines[offset:endLine]
+		numbered := make([]string, 0, len(selected))
+		for index, line := range selected {
+			numbered = append(numbered, fmt.Sprintf("%4d: %s", offset+index+1, line))
+		}
+		content := strings.Join(numbered, "\n")
+		truncated := endLine < totalLines
+		if maxBytes > 0 && len([]byte(content)) > maxBytes {
+			bytes := []byte(content)[:maxBytes]
+			for len(bytes) > 0 && !utf8.Valid(bytes) {
+				bytes = bytes[:len(bytes)-1]
+			}
+			content = string(bytes)
+			truncated = true
+		}
+		resultPath := fullPath
+		if root == "skills" {
+			resultPath = localReadableResultPath(root, localContext.Workspace, settings.SkillsRoot, fullPath)
+		}
+		return ToolResult{Value: map[string]any{
+			"path":       resultPath,
+			"encoding":   "utf-8",
+			"line_count": totalLines,
+			"content":    content,
+			"truncated":  truncated,
+			"bytes":      len([]byte(content)),
+		}}, nil
+	})
+}

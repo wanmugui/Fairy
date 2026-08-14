@@ -1,0 +1,118 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Native build artifacts are cached locally, never committed.
+*.exe
+agent/agent-loop
+
+# PowerShell temp files
+*.ps1.bak
+*.ps1.old
+
+# Logs
+logs/
+*.log
+web/clotho_log.txt
+
+# Run artifacts
+runs/
+web/sessions/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# API key files (contain secrets)
+DEEPSEEK_key.txt
+MINIMAX_key.txt
+
+# Real API config (contains hardcoded API key)
+
+# Workspace working files
+workspace/todos/
+workspace/ask_user/
+
+
+# Gateway temp files
+*.pid
+
+# IDE
+.vscode/
+.idea/
+
+# Temp/mystery files
+0
+
+# Runtime output files
+server_err.txt
+server_out.txt
+
+# Temp test files
+test_debug.py
+test_final.py
+verify_streaming.py
+
+# Frontend node_modules
+frontend/node_modules/
+
+# Root development launcher metadata
+node_modules/
+
+# pnpm store (�ⲿ��������)
+.pnpm-store/
+
+# Workspace runtime outputs
+workspace/result/
+workspace/stage_status.jsonl
+
+# PPT template bundles are optional local resources. Keep the directory marker
+# in Git, but do not commit copied template assets from a developer machine.
+skills/ppt-template-mode/templates/*
+!skills/ppt-template-mode/templates/.gitkeep
+
+# Frontend build output
+frontend/dist/
+# Session files (runtime)
+frontend/sessions/*.json
+
+# Workspace ppt (runtime)
+workspace/ppt/
+# Auto-installed tools (Node.js, pnpm).tools/
+
+
+# Auto-installed tools (Node.js, pnpm)
+.tools/
+
+# npm cache
+npm-cache/
+
+# Session request logs
+frontend/sessions/*_requests/
+
+# Session files
+frontend/sessions/
+.gopath/
+.pnpm-store/
+
+# Backup files
+*.exe~
+
+# Local API secrets (gitignored)
+config/local_secrets.json
+
+
+ppt_batch/docs/
+
+# PPT 分析文档（本地仅供查看，不提交）
+
+# Superpowers 设计文档（本地设计产物，不提交）
+docs/superpowers/
+
+# Local AI model weights & design source assets
+models/
+fairy形象/

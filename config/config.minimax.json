@@ -1,0 +1,254 @@
+{
+  "api": {
+    "base_url": "https://api.minimaxi.com/v1",
+    "api_key": "READ_FROM_MINIMAX_KEY_TXT",
+    "model": "MiniMax-Text-01",
+    "timeout_sec": 120,
+    "temperature": 0.4,
+    "max_tokens": 8192
+  },
+  "workspace_dir": "workspace",
+  "use_mock": false,
+  "prompts": {
+    "system_path": "config/locales/system/zh.md",
+    "user_path": "config/user.txt"
+  },
+  "system_parts_dir": "config/locales/system/parts/zh",
+  "skills_dir": "skills",
+  "history_dir": "runs",
+  "mock_file": "config/mock_responses.json",
+  "unifiedToolService": {
+    "endpoint": "http://127.0.0.1:8080/api/agent/tool_call",
+    "timeout": 120,
+    "bearerToken": ""
+  },
+  "httpTools": {
+    "ask_user": {
+      "enabled": true
+    },
+    "bash": {
+      "enabled": true
+    },
+    "create_subtask": {
+      "enabled": true
+    },
+    "document_parser": {
+      "enabled": true
+    },
+    "edit_file": {
+      "enabled": true
+    },
+    "execute_code": {
+      "enabled": true
+    },
+    "fetch_url": {
+      "enabled": true
+    },
+    "get_current_time": {
+      "enabled": true
+    },
+    "glob": {
+      "enabled": true
+    },
+    "html_to_png": {
+      "enabled": true
+    },
+    "image_generate": {
+      "enabled": true
+    },
+    "image_search": {
+      "enabled": true
+    },
+    "image_vqa": {
+      "enabled": true
+    },
+    "knowledge_download": {
+      "enabled": true
+    },
+    "knowledge_retrieve": {
+      "enabled": true
+    },
+    "list_todos": {
+      "enabled": true
+    },
+    "memory_search": {
+      "enabled": true
+    },
+    "read_file": {
+      "enabled": true
+    },
+    "reflection": {
+      "enabled": true
+    },
+    "todolist_append": {
+      "enabled": true
+    },
+    "todolist_create": {
+      "enabled": true
+    },
+    "todolist_update": {
+      "enabled": true
+    },
+    "web_search": {
+      "enabled": true
+    },
+    "write_file": {
+      "enabled": true
+    }
+  },
+  "tool_runtime": {
+    "executables": {
+      "python": "",
+      "shell": "",
+      "browser": ""
+    },
+    "tools": {
+      "ask_user": {
+        "backend": "local"
+      },
+      "bash": {
+        "backend": "local"
+      },
+      "create_subtask": {
+        "backend": "local"
+      },
+      "document_parser": {
+        "backend": "http"
+      },
+      "edit_file": {
+        "backend": "local"
+      },
+      "execute_code": {
+        "backend": "local"
+      },
+      "fetch_url": {
+        "backend": "http"
+      },
+      "get_current_time": {
+        "backend": "local"
+      },
+      "glob": {
+        "backend": "local"
+      },
+      "html_to_png": {
+        "backend": "local"
+      },
+      "image_generate": {
+        "backend": "http"
+      },
+      "image_search": {
+        "backend": "http"
+      },
+      "image_vqa": {
+        "backend": "http"
+      },
+      "knowledge_download": {
+        "backend": "http"
+      },
+      "knowledge_retrieve": {
+        "backend": "http"
+      },
+      "list_todos": {
+        "backend": "local"
+      },
+      "memory_search": {
+        "backend": "http"
+      },
+      "read_file": {
+        "backend": "local"
+      },
+      "reflection": {
+        "backend": "http"
+      },
+      "todolist_append": {
+        "backend": "local"
+      },
+      "todolist_create": {
+        "backend": "local"
+      },
+      "todolist_update": {
+        "backend": "local"
+      },
+      "write_file": {
+        "backend": "local"
+      },
+      "web_search": {
+        "backend": "http"
+      }
+    },
+    "retry_count": 1
+  },
+  "tools_schemas": "config/tools/schemas.json",
+  "max_steps": 60,
+  "skills": [
+    {
+      "name": "deep-research",
+      "description": "当用户提出深度调研、报告生成等请求时使用。请求技能要求先澄清需求，再由主线程拆步骤、按步骤分发子任务，最后由主线程统一综合，并按交付形态决定直接回复或文件成文。",
+      "location": "/skills/deep-research"
+    },
+    {
+      "name": "document-writing",
+      "description": "当任务进入结构化文档的成文阶段时使用，例如报告、proposal、spec、decision doc、研究报告最终撰写、长篇结构化 Markdown。仅在 writing / final synthesis 阶段触发，不用于前期搜索、取证、subtask 材料收集。",
+      "location": "/skills/document-writing"
+    },
+    {
+      "name": "ppt-maker",
+      "description": "当用户需要新建整套 PPT、继续已有 PPT 工件、或从上游半成品报告启动 PPT 生成时使用。用户要求制作PPT时，必须立即读取此skill。此skill负责汇总任务信息，整理参考数据，然后分发到对应的制作模式 Skill。",
+      "location": "/skills/ppt-maker"
+    },
+    {
+      "name": "ppt-no-template-mode",
+      "description": "当 PPT 任务已确认使用无模板模式（ppt_mode=no-template），且 task_pack.json、info_pack.json 和 deck 工作目录均就绪时使用。负责设计信息生成、大纲生成、资产规划、逐页 HTML 生成和 review/rewrite 全链路。只要 ppt-maker 分发到无模板模式，都必须进入本 Skill。",
+      "location": "/skills/ppt-no-template-mode"
+    },
+    {
+      "name": "ppt-template-mode",
+      "description": "当 PPT 任务已确认使用模板模式（ppt_mode=template），且 task_pack.json、info_pack.json、模板配置文件和模板 HTML 目录均就绪时使用。负责模板编排、大纲生成、资产规划和逐页 HTML 生成全链路。只要 ppt-maker 分发到模板模式，都必须进入本 Skill。",
+      "location": "/skills/ppt-template-mode"
+    },
+    {
+      "name": "ppt-creative-mode",
+      "description": "当 PPT 任务确认使用创意模式（ppt_mode=creative），且 task_pack.json / info_pack.json / deck 工作目录均就绪时使用。负责风格生成、大纲生成、逐页并发调用 creative_page_render API 出图的全链路。只要 ppt-maker 分发到创意模式，都必须进入本 Skill。",
+      "location": "/skills/ppt-creative-mode"
+    }
+  ],
+  "reflection": {
+    "enabled": false
+  },
+  "tools": {
+    "_comment": "生产工具配置兼容字段。当前本地 Agent 直接消费 readFile；pptTools（如配置）会传给本地环境工具。其余服务能力通过 unifiedToolService 调用，不再自动转换为旧 TOOL_* 子进程环境变量。",
+    "fetchUrl": {
+      "_comment": "fetch_url 的生产摘要模型兼容字段。当前本地 mock 仅返回确定性协议结果；真实摘要行为由接入的 HTTP 服务实现。",
+      "summaryModelName": "MaaS_Cl_Sonnet_46_Multi_Modal",
+      "summaryModelBaseUrl": "https://clotho-test.xiaohuanxiong.com/v2/llm"
+    },
+    "readFile": {
+      "_comment": "read_file 大文件【分段读取】配置：文件超过 segmentReadMaxTokens 时按段读，防止单次返回过大撑爆上下文；超过 maxReadFileSizeBytes(10MB) 不直读",
+      "segmentReadMaxTokens": 8192,
+      "segmentReadMinTokens": 200,
+      "maxReadFileSizeBytes": 10485760
+    },
+    "imageVQA": {
+      "_comment": "image_vqa 的服务侧模型配置；本地需接可达 HTTP 服务，mock 仅用于协议验证。",
+      "modelName": "dataanalysis-wangsu-claude-sonnet-46-multimodal"
+    },
+    "documentParser": {
+      "_comment": "document_parser【文档解析】真实后端 API：serviceUrl 是解析服务，parserEndpoint 是 uniparse 解析端点；均为生产 k8s 内网地址，本地接入需换可达地址",
+      "serviceUrl": "http://python-tool-server:3002",
+      "parserEndpoint": "http://headless-svc-uniparse-app.knowledge:8000",
+      "uploadDir": "document_parser",
+      "outputMaxTokens": 4000,
+      "outputTruncateStrategy": "middle",
+      "tableMaxDisplayRows": 10
+    },
+    "rerank": {
+      "_comment": "rerank【知识库重排】服务（生产内网，本地知识库流程一般用不到）",
+      "serviceUrl": "http://rerank-inner.knowledge.svc.cluster.local:44444",
+      "chunkMinTokens": 200,
+      "chunkOverlapTokens": 0,
+      "topK": 10,
+      "threshold": 0.2
+    }
+  },
+  "_comment": "Fairy MiniMax-Text-01 config; api_key resolved from repo root MINIMAX_key.txt"
+}

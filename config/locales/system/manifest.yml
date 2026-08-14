@@ -1,0 +1,26 @@
+# System Prompt 分块加载清单
+# 对应 Python system_prompt_zh.md / system_prompt_en.md 中的 {% include %} 声明顺序
+# 运行时按此列表从 parts/{lang}/ 目录依次加载并拼接
+# 中英文语言与安全规则、输出格式分别集中在 08 和 09。
+
+zh:
+  - 01_role.md
+  - 02_core_capabilities.md
+  - 03_file_system.md
+  - 04_SOP.md
+  - 05_memory_policy.md
+  - 06_long_term_memory.md
+  - 07_user_profile.md
+  - 08_language_and_safety.md
+  - 09_output_formats.md
+
+en:
+  - 01_role.md
+  - 02_core_capabilities.md
+  - 03_file_system.md
+  - 04_SOP.md
+  - 05_memory_policy.md
+  - 06_long_term_memory.md
+  - 07_user_profile.md
+  - 08_language_and_safety.md
+  - 09_output_formats.md

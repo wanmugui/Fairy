@@ -1,0 +1,40 @@
+{
+  "main": [
+    {
+      "finish_reason": "tool_calls",
+      "content": "<process><message>正在委派 PPT 前置任务。</message></process>",
+      "tool_calls": [
+        {
+          "id": "call_subtask_001",
+          "type": "function",
+          "function": {
+            "name": "create_subtask",
+            "arguments": "{\"title\":\"PPT 冒烟子任务\",\"goal\":\"输出一份用于验证子任务生命周期的 PPT 准备结论\",\"todo\":\"完成后在 subtask_result 中给出结论\"}"
+          }
+        }
+      ]
+    },
+    {
+      "finish_reason": "stop",
+      "content": "<report>\n<ppt_task_finished>\n<status>success</status>\n<summary>Mock PPT 主流程和子任务流程已完成。</summary>\n</ppt_task_finished>\n</report>",
+      "tool_calls": []
+    },
+    {
+      "finish_reason": "stop",
+      "content": "PPT 冒烟流程验证",
+      "tool_calls": []
+    }
+  ],
+  "subtask": [
+    {
+      "finish_reason": "stop",
+      "content": "<report>\n<subtask_result>\n<result>子任务 Mock 响应成功，生命周期、会话和统计链路已验证。</result>\n<subtask_status>success</subtask_status>\n</subtask_result>\n</report>",
+      "tool_calls": []
+    },
+    {
+      "finish_reason": "stop",
+      "content": "PPT 冒烟子任务",
+      "tool_calls": []
+    }
+  ]
+}
