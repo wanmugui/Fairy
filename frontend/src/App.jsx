@@ -706,6 +706,7 @@ export default function App() {
             sessionName={sessionNameRef.current || sessionName}
             muted={muted}
             onTurnComplete={refreshSessions}
+            onSelectSession={name => { setVoiceMode(false); loadSession(name); }}
           />
         )}
         {pendingAskUser && (

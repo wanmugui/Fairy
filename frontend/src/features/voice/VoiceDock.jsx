@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { sendChat, normalizeServiceMessages, extractAssistantContent } from '../../api/chat';
+import { sendChat, normalizeServiceMessages, extractAssistantContent, fetchSessions } from '../../api/chat';
 
 function readableText(content) {
   if (!content) return '';
@@ -8,11 +8,14 @@ function readableText(content) {
   return base.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-export default function VoiceDock({ model, sessionName, muted, onTurnComplete }) {
+export default function VoiceDock({ model, sessionName, muted, onTurnComplete, onSelectSession }) {
   const [transcript, setTranscript] = useState([]);
   const [status, setStatus] = useState('idle');
   const [interim, setInterim] = useState('');
   const [recording, setRecording] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
 
   const micRef = useRef(null);
   const interimRef = useRef('');
@@ -192,14 +195,43 @@ export default function VoiceDock({ model, sessionName, muted, onTurnComplete })
       <div className="voice-dock-bg" aria-hidden="true" />
       <div className="voice-dock-texture" aria-hidden="true" />
       <div className="voice-dock-icon voice-dock-icon-01" aria-hidden="true" />
-      <div className="voice-dock-icon voice-dock-icon-g36" aria-hidden="true" />
       <div className="voice-dock-rolltext" aria-hidden="true"><span>THE THIRD GENERATION SEQUENTIAL INTEGRATED UNIVERSAL ARTIFICIAL INTELLIGENCE · FAIRY</span></div>
       <div className="voice-dock-web" aria-hidden="true" />
       <div className="voice-dock-strip voice-dock-strip-top" aria-hidden="true" />
       <div className="voice-dock-strip voice-dock-strip-bottom" aria-hidden="true" />
       <div className="voice-dock-film voice-dock-film-top" aria-hidden="true" />
       <div className="voice-dock-film voice-dock-film-bottom" aria-hidden="true" />
-      <div className="voice-dock-button" aria-hidden="true" />
+      <button
+        type="button"
+        className={`voice-dock-button${menuOpen ? ' active' : ''}`}
+        onClick={() => {
+          const next = !menuOpen;
+          setMenuOpen(next);
+          if (next && sessions.length === 0) {
+            setSessionsLoading(true);
+            fetchSessions().then(list => { setSessions(list || []); setSessionsLoading(false); }).catch(() => setSessionsLoading(false));
+          }
+        }}
+        aria-expanded={menuOpen}
+        aria-label="Fairy 功能设置"
+      >
+        <span className="voice-dock-button-dot" />
+      </button>
+      {menuOpen ? (
+        <div className="voice-dock-menu voice-dock-history">
+          <div className="voice-dock-menu-title">会话历史</div>
+          <div className="voice-dock-menu-list">
+            {sessionsLoading ? <div className="voice-dock-menu-empty">加载中...</div> : null}
+            {!sessionsLoading && sessions.length === 0 ? <div className="voice-dock-menu-empty">暂无历史会话</div> : null}
+            {sessions.map(s => (
+              <button key={s.name} type="button" className="voice-dock-menu-item" onClick={() => { setMenuOpen(false); if (onSelectSession) onSelectSession(s.name); }}>
+                <span className="voice-dock-menu-item-name">{s.name}</span>
+                <span className="voice-dock-menu-item-meta">{s.message_count} 条 · {s.modified ? s.modified.slice(11, 19) : ''}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="voice-dock-vignette" aria-hidden="true" />
 
       <div className="fairy-avatar" aria-label="Fairy 动态形象">
