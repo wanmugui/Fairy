@@ -3,7 +3,6 @@ import Sidebar from './components/Sidebar';
 import ChatArea from './features/chat/ChatArea';
 import { SubtaskStreamContext } from './components/ToolBlock';
 import InputBar from './components/InputBar';
-import VoiceDock from './features/voice/VoiceDock';
 // import VersionNav from './components/VersionNav';  // temporarily disabled (results-only view)
 import AskModal from './components/AskModal';
 import PPTConfigModal from './components/PPTConfigModal';
@@ -73,7 +72,6 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const audioCtxRef = useRef(null);
   const audioSourceRef = useRef(null);
-  const [voiceMode, setVoiceMode] = useState(false);
   const sendStartRef = useRef(0);
   const sessionNameRef = useRef('');
   const pollTokenRef = useRef(0);
@@ -624,7 +622,7 @@ export default function App() {
   }, [messages]);
 
   const speak = useCallback(async (text) => {
-    if (voiceMode || muted || !text || !text.trim()) return;
+    if (muted || !text || !text.trim()) return;
     try {
       const r = await fetch('/voice/api/tts', {
         method: 'POST',
@@ -650,7 +648,7 @@ export default function App() {
       audioSourceRef.current = src;
       src.start();
     } catch (e) { /* voice off is fine */ }
-  }, [muted, voiceMode]);
+  }, [muted]);
 
   const sessionStatsTotal = useMemo(() => {
     const base = (stats && stats.session) || {};
@@ -670,7 +668,7 @@ export default function App() {
         onNew={newChat}
         onDelete={delSession}
       />
-      <div className={`main${voiceMode ? ' voice-active' : ''}`}>
+      <div className="main">
         <header>
           <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}>
             {models.map(m => (
@@ -687,7 +685,6 @@ export default function App() {
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
             </>
             )}</button>
-          <button className={`voice-enter${voiceMode ? ' active' : ''}`} onClick={() => setVoiceMode(v => !v)} title="退出实时语音对话"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg><span>{voiceMode ? '退出语音' : '语音'}</span></button>
           <span className="session-name">{sessionName} · {messages.length} msgs</span>
           <span className="version-tag" title="frontend build">v2.10</span>
           {stats && stats.session && (
@@ -700,15 +697,6 @@ export default function App() {
         <ChatArea key={sessionName || 'new'} messages={messages} loading={loading} mode={mode} stats={stats} />
       </SubtaskStreamContext.Provider>
         <InputBar onSend={send} loading={loading} onAbort={abort} />
-        {voiceMode && (
-          <VoiceDock
-            model={selectedModel}
-            sessionName={sessionNameRef.current || sessionName}
-            muted={muted}
-            onTurnComplete={refreshSessions}
-            onSelectSession={name => { setVoiceMode(false); loadSession(name); }}
-          />
-        )}
         {pendingAskUser && (
           isPPTConfigAsk(pendingAskUser) ? (
             <PPTConfigModal onComplete={handleAskComplete} onSkipAll={handleAskSkip} />

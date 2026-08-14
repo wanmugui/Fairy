@@ -73,7 +73,7 @@ header .session-name { margin-left: auto; font-family: ui-monospace, monospace; 
 .empty { text-align: center; color: #9ca3af; margin-top: 80px; }
 
 .input-row { position: absolute; bottom: 18px; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; padding: 0 16px; z-index: 5; }
-.chat-input-box { width: 00%; max-width: 760px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 24px; box-shadow: 0 8px 28px rgba(0,0,0,.12); padding: 12px 14px 8px; transition: border-color .15s, box-shadow .15s; pointer-events: auto; }
+.chat-input-box { width: 100%; max-width: 760px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 24px; box-shadow: 0 8px 28px rgba(0,0,0,.12); padding: 12px 14px 8px; transition: border-color .15s, box-shadow .15s; pointer-events: auto; }
 .chat-input-box:focus-within { border-color: #2563eb; box-shadow: 0 2px 16px rgba(37,99,235,.14); }
 .chat-input-box textarea { width: 100%; border: none; outline: none; resize: none; font-family: 'Microsoft YaHei','微软雅黑',sans-serif; font-size: 15px; line-height: 1.5; color: #111827; background: transparent; max-height: 200px; min-height: 24px; }
 .chat-input-box textarea::placeholder { color: #9ca3af; }
