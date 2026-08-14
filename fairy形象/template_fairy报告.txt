@@ -1,0 +1,70 @@
+创建的报告: 
+	7/23/2024	6:11:03 PM
+
+项目名: template_fairy.aep
+
+将源文件收集到: 
+	C:\AE\Fairy\Files\Fairy 工程文件
+
+收集的源文件: 全部
+
+收集的合成: 
+	fairy_project
+	self.Fairy
+	bg_fairy
+	rolltext.bg
+	ui_zenless-zone-zero
+	film
+	ui_dailogBox-zzz
+	content3
+	fairy.greenground
+	
+收集的文件数: 23
+
+收集的文件大小: 6.1 MB
+
+收集的源文件: 
+	C:\AE\Fairy\Source\60%daily-BGM.mp3
+	C:\AE\Fairy\Source\audio\content1.wav
+	C:\AE\Fairy\Source\audio\content2.wav
+	C:\AE\Fairy\Source\audio\content3.wav
+	C:\AE\Fairy\Source\bg\bg.png
+	C:\AE\Fairy\Source\bg\texture.elliipse.png
+	C:\AE\Fairy\Source\bg\Web 1920 – 2.png
+	C:\AE\Fairy\Source\circle_b.png
+	C:\AE\Fairy\Source\circle_bg.png
+	C:\AE\Fairy\Source\circle_db.png
+	C:\AE\Fairy\Source\circle_lb.png
+	C:\AE\Fairy\Source\circle_shadow.png
+	C:\AE\Fairy\Source\circle_shining_white.png
+	C:\AE\Fairy\Source\shine_circle.png
+	C:\AE\Fairy\Source\ui\01.png
+	C:\AE\Fairy\Source\ui\blank.png
+	C:\AE\Fairy\Source\ui\button.menu-specialevent.png
+	C:\AE\Fairy\Source\ui\dialogBox.general.png
+	C:\AE\Fairy\Source\ui\fairy_pre.png
+	C:\AE\Fairy\Source\ui\film.png
+	C:\AE\Fairy\Source\ui\Group 36.png
+	C:\AE\Fairy\Source\wheel.png
+	C:\AE\Fairy\Source\wheel_wave.png
+	
+渲染增效工具:
+	高级 3D
+	
+使用的效果: 5
+
+效果: CC Sphere
+	
+效果: 百叶窗
+	
+效果: 动态拼贴
+	
+效果: 高斯模糊
+	
+效果: 快速方框模糊
+	
+
+图层: 文本图层
+	外部依存关系: 
+		字体系列:“Impact”，字体样式:“Regular”
+
