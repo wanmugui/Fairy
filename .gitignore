@@ -38,3 +38,7 @@ apps/web/dist/
 worktrees/
 .agents/worktrees/
 .typert-*/
+# Fairy voice app local secrets & build output
+MINIMAX_key.txt
+DEEPSEEK_key.txt
+voice-app/dist/
