@@ -11,6 +11,11 @@ export async function fetchSessions() {
   return r.json();
 }
 
+export async function fetchSystemPrompt() {
+  const r = await fetch(BASE + '/system-prompt');
+  return r.json();
+}
+
 export async function sendChat(message, model, session) {
   const r = await fetch(BASE + '/chat', {
     method: 'POST',

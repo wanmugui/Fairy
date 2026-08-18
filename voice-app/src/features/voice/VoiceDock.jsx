@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { sendChat, normalizeServiceMessages, extractAssistantContent, fetchSessions, fetchModels } from '../../api/chat';
+import { sendChat, normalizeServiceMessages, extractAssistantContent, fetchSessions, fetchModels, fetchSystemPrompt } from '../../api/chat';
 
 function readableText(content) {
   if (!content) return '';
@@ -56,6 +56,11 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
   const [menuPanel, setMenuPanel] = useState('home');
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [toolTrace, setToolTrace] = useState([]);
+  const [draft, setDraft] = useState('');
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [systemPromptLoading, setSystemPromptLoading] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(false);
   const [agentOnline, setAgentOnline] = useState(null); // null = checking
   const [models, setModels] = useState([]);
 
@@ -64,6 +69,7 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
   const audioCtxRef = useRef(null);
   const audioSourceRef = useRef(null);
   const scrollRef = useRef(null);
+  const promptBodyRef = useRef(null);
 
   // Probe the agent API so the HUD can show link state.
   useEffect(() => {
@@ -71,6 +77,27 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
       .then(list => { setModels(list || []); setAgentOnline(true); })
       .catch(() => setAgentOnline(false));
   }, []);
+
+  useEffect(() => {
+    if (!promptOpen) return;
+    const onWheel = e => {
+      const el = promptBodyRef.current;
+      if (!el) return;
+      e.preventDefault();
+      el.scrollTop += e.deltaY;
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel);
+  }, [promptOpen]);
+
+  useEffect(() => {
+    if (menuPanel === 'config' && !systemPrompt && !systemPromptLoading) {
+      setSystemPromptLoading(true);
+      fetchSystemPrompt()
+        .then(d => { setSystemPrompt(d.content || ''); setSystemPromptLoading(false); })
+        .catch(() => setSystemPromptLoading(false));
+    }
+  }, [menuPanel, systemPrompt, systemPromptLoading]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -112,6 +139,8 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
   const runTurn = useCallback(async (userText) => {
     setTranscript(t => [...t, { role: 'user', text: userText }]);
     setStatus('thinking');
+    setToolTrace([]);
+    let gotStreamed = false;
     try {
       const res = await sendChat(userText, model, sessionName);
       const reader = res.body.getReader();
@@ -133,7 +162,16 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
             if (raw === '[DONE]') continue;
             try {
               const ev = JSON.parse(raw);
-              if (ev.type === 'done' && ev.messages) {
+              if (ev.type === 'tool') {
+                setToolTrace(t => [...t, ev]);
+              } else if (ev.type === 'user') {
+                setTranscript(t => [...t, { role: 'user', text: ev.text }]);
+              } else if (ev.type === 'context') {
+                setTranscript(t => [...t, { role: 'context', text: ev.label }]);
+              } else if (ev.type === 'message') {
+                gotStreamed = true;
+                setTranscript(t => [...t, { role: 'fairy', text: ev.text }]);
+              } else if (ev.type === 'done' && ev.messages) {
                 const norm = normalizeServiceMessages(ev.messages);
                 const last = [...norm].reverse().find(m => m.role === 'assistant' && m.content && m.content.trim());
                 if (last) finalText = readableText(last.content);
@@ -148,7 +186,16 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
         if (raw !== '[DONE]') {
           try {
             const ev = JSON.parse(raw);
-            if (ev.type === 'done' && ev.messages) {
+            if (ev.type === 'tool') {
+              setToolTrace(t => [...t, ev]);
+            } else if (ev.type === 'user') {
+              setTranscript(t => [...t, { role: 'user', text: ev.text }]);
+            } else if (ev.type === 'context') {
+              setTranscript(t => [...t, { role: 'context', text: ev.label }]);
+            } else if (ev.type === 'message') {
+              gotStreamed = true;
+              setTranscript(t => [...t, { role: 'fairy', text: ev.text }]);
+            } else if (ev.type === 'done' && ev.messages) {
               const norm = normalizeServiceMessages(ev.messages);
               const last = [...norm].reverse().find(m => m.role === 'assistant' && m.content && m.content.trim());
               if (last) finalText = readableText(last.content);
@@ -157,7 +204,7 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
         }
       }
       if (!finalText) finalText = '抱歉，主人，我这边没有拿到可用回复。';
-      setTranscript(t => [...t, { role: 'fairy', text: finalText }]);
+      if (!gotStreamed) setTranscript(t => [...t, { role: 'fairy', text: finalText }]);
       if (onTurnComplete) onTurnComplete();
       await speak(finalText);
       setStatus('idle');
@@ -238,10 +285,17 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
     else startMic();
   }, [status, recording]);
 
+  const sendDraft = () => {
+    const msg = draft.trim();
+    if (!msg || status === 'thinking') return;
+    setDraft('');
+    runTurn(msg);
+  };
+
   const openMenu = () => {
     const next = !menuOpen;
     setMenuOpen(next);
-    if (next) setMenuPanel('home');
+    if (next) setMenuPanel('current');
   };
 
   const loadSessions = () => {
@@ -256,6 +310,22 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
       {/* ambient layers */}
       <div className="voice-dock-bg" aria-hidden="true" />
       <div className="voice-dock-texture" aria-hidden="true" />
+      <div className="voice-tool-panel">
+        <div className="voice-tool-panel-title">工具过程</div>
+        <div className="voice-tool-panel-list">
+          {toolTrace.length === 0 ? <div className="voice-tool-empty">等待 agent 工具调用...</div> : null}
+          {toolTrace.map((t, i) => (
+            <div key={i} className="voice-tool-item">
+              <div className="voice-tool-item-head">
+                <span className="voice-tool-name">{t.name}</span>
+                <span className={`voice-tool-state${t.isError ? ' error' : ''}`}>{t.isError ? 'ERR' : 'OK'}</span>
+              </div>
+              <div className="voice-tool-args">{typeof t.arguments === 'string' ? t.arguments : JSON.stringify(t.arguments)}</div>
+              {t.result ? <div className="voice-tool-result">{t.result}</div> : null}
+            </div>
+          ))}
+        </div>
+      </div>
       <div className="voice-dock-web" aria-hidden="true" />
       <div className="voice-dock-grid" aria-hidden="true" />
       <div className="voice-dock-icon voice-dock-icon-01" aria-hidden="true" />
@@ -290,6 +360,16 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
             {agentOnline === null ? 'LINK…' : agentOnline ? 'ONLINE' : 'OFFLINE'}
           </span>
         </div>
+        <button
+          type="button"
+          className={`voice-mic voice-mic-top${recording ? ' recording' : ''}`}
+          onClick={toggleMic}
+          disabled={status === 'thinking'}
+          aria-label={recording ? '停止录音' : '开始语音对话'}
+          title={recording ? '点击结束并发送' : '点击开始语音对话'}
+        >
+          <MicIcon />
+        </button>
         <button type="button" className={`voice-mute-btn${muted ? ' muted' : ''}`} onClick={() => setMuted(m => !m)} title="语音播报开关" aria-label="语音播报开关">
           {muted ? <MutedIcon /> : <SoundIcon />}
         </button>
@@ -307,10 +387,28 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
                 <span className="voice-dock-menu-option-title">Session</span>
                 <span className="voice-dock-menu-option-meta">历史会话 / 切换语境</span>
               </button>
+              <button type="button" className="voice-dock-menu-option" onClick={() => setMenuPanel('current')}>
+                <span className="voice-dock-menu-option-title">Current</span>
+                <span className="voice-dock-menu-option-meta">当前会话历史回复</span>
+              </button>
               <button type="button" className="voice-dock-menu-option" onClick={() => setMenuPanel('config')}>
                 <span className="voice-dock-menu-option-title">Config</span>
                 <span className="voice-dock-menu-option-meta">模型 / 播报 / 连接</span>
               </button>
+            </>
+          ) : menuPanel === 'current' ? (
+            <>
+              <button type="button" className="voice-dock-menu-back" onClick={() => setMenuPanel('home')}>← Back</button>
+              <div className="voice-dock-menu-title">Current Session</div>
+              <div className="voice-dock-menu-history">
+                {transcript.length === 0 ? <div className="voice-dock-menu-empty">暂无历史回复</div> : null}
+                {transcript.map((m, i) => (
+                  <div key={i} className={`voice-dock-history-item ${m.role}`}>
+                    <span className="voice-dock-history-role">{m.role === 'user' ? 'YOU' : m.role === 'context' ? 'CTX' : 'FAIRY'}</span>
+                    <span className="voice-dock-history-text">{m.text}</span>
+                  </div>
+                ))}
+              </div>
             </>
           ) : menuPanel === 'session' ? (
             <>
@@ -348,6 +446,12 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
                     <span className="voice-tech-value">{models.map(m => m.id).join(' / ')}</span>
                   </div>
                 ) : null}
+                <div className="voice-dock-config-row voice-dock-config-prompt">
+                  <span className="voice-tech">System Prompt</span>
+                  <button type="button" className="voice-dock-prompt-open" onClick={() => setPromptOpen(true)}>
+                    {systemPromptLoading ? '加载中...' : '查看'}
+                  </button>
+                </div>
               </div>
             </>
           )}
@@ -378,34 +482,42 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
 
       {/* transcript dialog */}
       <div className="voice-dock-dialog" ref={scrollRef}>
-        {transcript.length === 0 && !interim ? (
-          <div className="voice-empty">等待指令 · 点击下方麦克风开始对话</div>
-        ) : null}
-        {transcript.map((m, i) => (
-          <div key={i} className={`voice-line voice-line-${m.role}`}>
-            <span className="voice-line-name">{m.role === 'user' ? 'YOU' : 'FAIRY'}</span>
-            <span className="voice-line-text">{m.text}</span>
-          </div>
-        ))}
-        {interim ? <div className="voice-line voice-line-interim"><span className="voice-line-name">YOU</span><span className="voice-line-text">{interim}…</span></div> : null}
+        {(() => {
+          const lastFairy = [...transcript].reverse().find(m => m.role === 'fairy');
+          if (!lastFairy) return <div className="voice-empty">等待 Fairy 回复...</div>;
+          return (
+            <div className="voice-line voice-line-fairy voice-line-current">
+              <span className="voice-line-name">FAIRY</span>
+              <span className="voice-line-text">{lastFairy.text}</span>
+            </div>
+          );
+        })()}
+        <div className="voice-dialog-input">
+          <input
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); sendDraft(); } }}
+            placeholder="请输入你的指令..."
+            disabled={status === 'thinking'}
+          />
+          <button type="button" onClick={sendDraft} disabled={!draft.trim() || status === 'thinking'} aria-label="发送">↓</button>
+        </div>
       </div>
 
-      {/* mic cluster */}
-      <div className="voice-controls">
-        <button
-          type="button"
-          className={`voice-mic${recording ? ' recording' : ''}`}
-          onClick={toggleMic}
-          disabled={status === 'thinking'}
-          aria-label={recording ? '停止录音' : '开始语音对话'}
-          title={recording ? '点击结束并发送' : '点击开始语音对话'}
-        >
-          <MicIcon />
-        </button>
-        <span className="voice-hint">
-          {status === 'thinking' ? 'Fairy 正在处理…' : recording ? '聆听中 · 再次点击结束并发送' : '点击麦克风开始语音对话'}
-        </span>
-      </div>
+      {/* system prompt modal */}
+      {promptOpen ? (
+        <div className="voice-dock-modal" onClick={() => setPromptOpen(false)}>
+          <div className="voice-dock-modal-box" onClick={e => e.stopPropagation()}>
+            <div className="voice-dock-modal-header">
+              <span>System Prompt</span>
+              <button type="button" onClick={() => setPromptOpen(false)} aria-label="关闭">×</button>
+            </div>
+            <div className="voice-dock-modal-body" ref={promptBodyRef}>
+              {systemPromptLoading ? '加载中...' : (systemPrompt || '暂无')}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* footer */}
       <footer className="voice-footer">
