@@ -31,6 +31,37 @@ func localErrorResult(toolName string, err error) ToolResult {
 	return shared.ErrorResult(toolName, err)
 }
 
+// localBoolArg reads a boolean accepting any of the supplied keys. Accepts the
+// JSON-native `true/false` plus the common string spellings models sometimes
+// emit ("1", "yes", etc.).
+func localBoolArg(args map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		v, ok := args[key]
+		if !ok {
+			continue
+		}
+		switch t := v.(type) {
+		case bool:
+			return t
+		case string:
+			s := strings.ToLower(strings.TrimSpace(t))
+			if s == "true" || s == "1" || s == "yes" || s == "on" {
+				return true
+			}
+			if s == "false" || s == "0" || s == "no" || s == "off" || s == "" {
+				return false
+			}
+		case float64:
+			return t != 0
+		case int:
+			return t != 0
+		case int64:
+			return t != 0
+		}
+	}
+	return false
+}
+
 // localPptToolEnvironment provides the compatibility variables consumed by
 // PPT skill scripts. The old process toolloader used to inject them; Local
 // tools execute the scripts directly, so the injection belongs here instead.

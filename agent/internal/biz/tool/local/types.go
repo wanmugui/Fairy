@@ -32,6 +32,7 @@ type Config struct {
 	ConfigPath         string
 	SkillsRoot         string
 	UseMock            bool
+	BashPolicy         BashPolicy
 	ToolRuntime        *ToolRuntimeConfig
 	PptTools           PptToolsConfig
 	BuildSubtaskPrompt func(task string) (string, error)

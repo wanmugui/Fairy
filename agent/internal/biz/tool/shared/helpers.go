@@ -87,21 +87,22 @@ func ResolveWorkspacePath(workspace, requested string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve path %q: %w", requested, err)
 	}
-	relative, err := filepath.Rel(absWorkspace, fullPath)
-	if err != nil {
-		return "", fmt.Errorf("check path %q: %w", requested, err)
-	}
-	if relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
-		return "", fmt.Errorf("path %q is outside workspace", requested)
-	}
+	// Post-loosen: absolute paths are accepted as-is so the agent can reach
+	// any host directory the OS user can reach. Workspace containment still
+	// applies to relative paths (joined above). Destructive operations are
+	// policed at the bash layer, not here.
 	return fullPath, nil
 }
 
-// ResolveReadablePath resolves a path accepted by read-only local tools. The
-// local runtime deliberately exposes only the workspace and the configured
-// skills directory; it never turns an arbitrary absolute host path into a
-// model-readable file. /mnt/data is the production name for the workspace and
-// /skills is the production name for bundled skill files.
+// ResolveReadablePath resolves a path accepted by read-only local tools.
+//
+// Post-loosen behavior:
+//   - /skills/... still maps to the configured skills root (read-only).
+//   - /mnt/data/... still maps to the workspace for production-skill compat.
+//   - `local://...` accepts both virtual roots plus workspace-relative.
+//   - Other absolute paths are accepted unchanged; the bash policy layer
+//     is responsible for blocking destructive operations.
+//   - `memory://` / `knowledge://` remain unsupported by this local backend.
 func ResolveReadablePath(workspace, skillsRoot, requested string) (string, ReadablePathRoot, error) {
 	raw := strings.TrimSpace(requested)
 	if raw == "" {
@@ -140,9 +141,22 @@ func ResolveReadablePath(workspace, skillsRoot, requested string) (string, Reada
 			}
 			return fullPath, ReadablePathWorkspace, nil
 		}
-	}
-	if strings.HasPrefix(raw, "/") {
-		return "", "", fmt.Errorf("path %q is outside the supported local roots (/mnt/data and /skills)", requested)
+		// Any other absolute path: accept it literally. Pick ReadablePathSkills
+		// only when the resolved file actually lives under skillsRoot; the
+		// workspace tag is the safe default for everything else.
+		if hasLocalScheme || filepath.IsAbs(filepath.FromSlash(raw)) {
+			cleaned, err := filepath.Abs(filepath.FromSlash(raw))
+			if err != nil {
+				return "", "", fmt.Errorf("resolve path %q: %w", raw, err)
+			}
+			if strings.TrimSpace(skillsRoot) != "" {
+				if rel, relErr := filepath.Rel(skillsRoot, cleaned); relErr == nil &&
+					rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel) {
+					return cleaned, ReadablePathSkills, nil
+				}
+			}
+			return cleaned, ReadablePathWorkspace, nil
+		}
 	}
 
 	fullPath, err := resolvePathWithinRoot(workspace, raw)

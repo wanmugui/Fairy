@@ -141,8 +141,13 @@ func TestLocalHTMLToPNGRejectsWorkspaceTraversal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if !result.IsError || !strings.Contains(result.Value["error"].(string), "outside workspace") {
-			t.Fatalf("%s: unexpected traversal result %#v", name, result)
+		// Post-loosen: outside-workspace paths are accepted as long as the file
+		// exists. The previous "outside workspace" check is gone. For the
+		// "input" case the .html is missing → 'unavailable'. For the "output"
+		// case the input exists but the screenshot tool never wrote the .png
+		// → that runtime error is also expected.
+		if !result.IsError {
+			t.Fatalf("%s: expected error, got %#v", name, result.Value)
 		}
 	}
 }

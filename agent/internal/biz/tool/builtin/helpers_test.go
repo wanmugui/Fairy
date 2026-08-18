@@ -21,12 +21,20 @@ func TestResolveLocalWorkspacePathKeepsRelativePathInsideWorkspace(t *testing.T)
 	}
 }
 
-func TestResolveLocalWorkspacePathRejectsParentTraversal(t *testing.T) {
+func TestResolveLocalWorkspacePathAllowsParentTraversal(t *testing.T) {
+	// Post-loosen: the agent can read/write paths outside the workspace.
+	// "../outside.txt" now resolves to the parent of the temp dir (allowed).
 	workspace := t.TempDir()
+	parent := filepath.Dir(workspace)
 
 	for _, path := range []string{"../outside.txt", "local://../outside.txt"} {
-		if _, err := resolveLocalWorkspacePath(workspace, path); err == nil {
-			t.Fatalf("expected workspace escape to be rejected for %q", path)
+		got, err := resolveLocalWorkspacePath(workspace, path)
+		if err != nil {
+			t.Fatalf("expected %q to resolve, got error: %v", path, err)
+		}
+		want := filepath.Join(parent, "outside.txt")
+		if got != want {
+			t.Fatalf("unexpected resolution: got %q want %q", got, want)
 		}
 	}
 }
@@ -71,12 +79,25 @@ func TestResolveLocalReadablePathMapsProductionSkillPathToConfiguredRoot(t *test
 	}
 }
 
-func TestResolveLocalReadablePathRejectsUnsupportedOrHostPaths(t *testing.T) {
+func TestResolveLocalReadablePathAllowsHostPathsAndRejectsMemory(t *testing.T) {
 	workspace := t.TempDir()
-	for _, requested := range []string{"local:///etc/hosts", "memory://today.md", "knowledge://project/file.md"} {
+	// Post-loosen: arbitrary absolute host paths via local:// are accepted;
+	// memory:// and knowledge:// remain unsupported by this local backend.
+	for _, requested := range []string{"memory://today.md", "knowledge://project/file.md"} {
 		if _, _, err := resolveLocalReadablePath(workspace, t.TempDir(), requested); err == nil {
 			t.Fatalf("expected %q to be rejected", requested)
 		}
+	}
+	// And a host-style path now succeeds.
+	got, root, err := resolveLocalReadablePath(workspace, t.TempDir(), "local:///etc/hosts")
+	if err != nil {
+		t.Fatalf("expected host path to resolve, got: %v", err)
+	}
+	if root != "workspace" {
+		t.Fatalf("unexpected root kind: %q", root)
+	}
+	if !strings.HasSuffix(got, string(filepath.Separator)+"etc"+string(filepath.Separator)+"hosts") {
+		t.Fatalf("unexpected resolution: %q", got)
 	}
 }
 

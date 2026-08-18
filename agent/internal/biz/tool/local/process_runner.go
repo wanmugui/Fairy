@@ -21,6 +21,23 @@ type localProcessRequest struct {
 	SuccessFileMinSize int64
 	StdoutWriter       io.Writer
 	StderrWriter       io.Writer
+
+	// Detach, when true, returns immediately after Start() with a populated
+	// PID; stdout/stderr are streamed into OutputPath/ErrorPath and the caller's
+	// notification channel receives the final exit error (nil on success).
+	Detach        bool
+	OutputPath    string
+	ErrorPath     string
+	JobID         string
+	OnComplete    chan<- jobCompletion
+	CancelProcess func() error
+}
+
+type jobCompletion struct {
+	JobID    string
+	PID      int
+	ExitCode int
+	Err      error
 }
 
 type localProcessResult struct {
@@ -29,6 +46,11 @@ type localProcessResult struct {
 	ExitCode        int
 	TimedOut        bool
 	CompletedByFile bool
+
+	// Populated only when Detach=true. The caller polls the corresponding
+	// job_* tool to read the streaming files or to kill the process.
+	Detached bool
+	PID      int
 }
 
 type localProcessRunner interface {
@@ -65,6 +87,10 @@ func (osLocalProcessRunner) Run(ctx context.Context, request localProcessRequest
 	}
 	if request.StderrWriter != nil {
 		cmd.Stderr = io.MultiWriter(&stderr, request.StderrWriter)
+	}
+
+	if request.Detach {
+		return startLocalDetachedProcess(cmd, request)
 	}
 
 	if request.SuccessFile == "" {
@@ -141,6 +167,67 @@ func (osLocalProcessRunner) Run(ctx context.Context, request localProcessRequest
 func completedLocalSuccessFile(request localProcessRequest) bool {
 	info, err := os.Stat(request.SuccessFile)
 	return err == nil && info.Mode().IsRegular() && info.Size() >= localSuccessFileMinimumSize(request)
+}
+
+// startLocalDetachedProcess launches the command and returns immediately with
+// the PID. stdout/stderr stream into OutputPath/ErrorPath so the bash_job tool
+// can tail them; OnComplete fires once when the process exits or is killed.
+func startLocalDetachedProcess(cmd *exec.Cmd, request localProcessRequest) (localProcessResult, error) {
+	if request.OutputPath == "" || request.ErrorPath == "" {
+		return localProcessResult{}, fmt.Errorf("detach requires OutputPath and ErrorPath")
+	}
+	outFile, err := os.Create(request.OutputPath)
+	if err != nil {
+		return localProcessResult{}, fmt.Errorf("create stdout file: %w", err)
+	}
+	errFile, err := os.Create(request.ErrorPath)
+	if err != nil {
+		outFile.Close()
+		return localProcessResult{}, fmt.Errorf("create stderr file: %w", err)
+	}
+	cmd.Stdout = outFile
+	cmd.Stderr = errFile
+
+	if err := cmd.Start(); err != nil {
+		outFile.Close()
+		errFile.Close()
+		return localProcessResult{}, fmt.Errorf("start detached process %q: %w", request.Path, err)
+	}
+	pid := 0
+	if cmd.Process != nil {
+		pid = cmd.Process.Pid
+	}
+
+	if request.CancelProcess != nil {
+		registerDetachedJob(request.JobID, cmd, outFile, errFile, request.CancelProcess)
+	} else {
+		registerDetachedJob(request.JobID, cmd, outFile, errFile, func() error { return cmd.Process.Kill() })
+	}
+
+	completion := request.OnComplete
+	if completion != nil {
+		go func() {
+			waitErr := cmd.Wait()
+			outFile.Close()
+			errFile.Close()
+			exit := 0
+			if waitErr != nil {
+				var exitErr *exec.ExitError
+				if errors.As(waitErr, &exitErr) {
+					exit = exitErr.ExitCode()
+				} else {
+					exit = -1
+				}
+			}
+			unregisterDetachedJob(request.JobID)
+			select {
+			case completion <- jobCompletion{JobID: request.JobID, PID: pid, ExitCode: exit, Err: waitErr}:
+			default:
+			}
+		}()
+	}
+
+	return localProcessResult{Detached: true, PID: pid}, nil
 }
 
 func localSuccessFileMinimumSize(request localProcessRequest) int64 {

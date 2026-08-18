@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { sendChat, normalizeServiceMessages, extractAssistantContent, fetchSessions, fetchSessionMessages, fetchModels } from '../../api/chat';
 
+// TTS_ENABLED: mirrors App.jsx. false stops /voice/api/tts fetches when the
+// local voice service (:8787) is not running.
+const TTS_ENABLED = false;
+
 function readableText(content) {
   if (!content) return '';
   const report = content.match(/<report[^>]*>([\s\S]*?)<\/report>/i);
@@ -103,7 +107,7 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
   }, [transcript, interim]);
 
   const speak = useCallback(async (text) => {
-    if (muted || !text) return;
+    if (!TTS_ENABLED || muted || !text) return;
     try {
       const r = await fetch('/voice/api/tts', {
         method: 'POST',

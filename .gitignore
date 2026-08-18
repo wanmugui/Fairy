@@ -31,6 +31,9 @@ Thumbs.db
 DEEPSEEK_key.txt
 MINIMAX_key.txt
 
+# Local debugging artefacts
+fairy_system_prompt.txt
+
 # Real API config (contains hardcoded API key)
 
 # Workspace working files

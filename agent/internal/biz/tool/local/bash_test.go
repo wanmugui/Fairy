@@ -196,8 +196,10 @@ func TestLocalBashRejectsWorkingDirectoryOutsideWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.IsError || !strings.Contains(result.Value["error"].(string), "outside workspace") {
-		t.Fatalf("unexpected traversal result: %#v", result)
+	// Post-loosen: paths outside the workspace are allowed; the only failure
+	// here is that the directory does not exist.
+	if !result.IsError || !strings.Contains(result.Value["error"].(string), "working directory is unavailable") {
+		t.Fatalf("expected 'unavailable' error for missing dir, got %#v", result.Value)
 	}
 	if runner.request.Path != "" {
 		t.Fatal("runner should not start for invalid working directory")

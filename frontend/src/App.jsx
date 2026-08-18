@@ -1,3 +1,7 @@
+// TTS_ENABLED: false disables all /voice/api/tts calls until the local voice
+// service (:8787) is running again. Flip to true to restore TTS playback.
+const TTS_ENABLED = false;
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './features/chat/ChatArea';
@@ -622,7 +626,7 @@ export default function App() {
   }, [messages]);
 
   const speak = useCallback(async (text) => {
-    if (muted || !text || !text.trim()) return;
+    if (!TTS_ENABLED || muted || !text || !text.trim()) return;
     try {
       const r = await fetch('/voice/api/tts', {
         method: 'POST',

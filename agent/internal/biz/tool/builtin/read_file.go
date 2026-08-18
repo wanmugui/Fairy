@@ -3,7 +3,9 @@ package builtin
 import (
 	"context"
 	"fmt"
+	"mime"
 	"os"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 )
@@ -46,6 +48,32 @@ func NewLocalReadFileToolWithConfig(schema ToolDef, settings ReadFileToolConfig)
 		if settings.MaxReadFileSizeBytes > 0 && info.Size() > settings.MaxReadFileSizeBytes {
 			return localErrorResult("read_file", fmt.Errorf("file exceeds configured maximum size of %d bytes: %s", settings.MaxReadFileSizeBytes, fullPath)), nil
 		}
+		resultPath := fullPath
+		if root == "skills" {
+			resultPath = localReadableResultPath(root, localContext.Workspace, settings.SkillsRoot, fullPath)
+		}
+		// Multimodal dispatch: defer non-text targets to the appropriate
+		// backend tool rather than dumping binary bytes. Inspired by dsh
+		// `tool-fs/read-target.ts`, the model can then re-issue read_file with
+		// the matching tool to actually parse the content.
+		if dispatch := localReadFileDispatch(fullPath); dispatch != nil {
+			value := map[string]any{
+				"path":       resultPath,
+				"encoding":   dispatch.Encoding,
+				"line_count": 0,
+				"content":    "",
+				"truncated":  false,
+				"bytes":      info.Size(),
+				"deferred_to": map[string]any{
+					"tool":        dispatch.Tool,
+					"reason":      dispatch.Reason,
+					"target_path": resultPath,
+				},
+				"hint": fmt.Sprintf("this file is %s; call %s to read it instead of read_file", dispatch.Reason, dispatch.Tool),
+			}
+			return ToolResult{Value: value}, nil
+		}
+
 		data, err := os.ReadFile(fullPath)
 		if err != nil {
 			return localErrorResult("read_file", fmt.Errorf("read error: %w", err)), nil
@@ -84,10 +112,6 @@ func NewLocalReadFileToolWithConfig(schema ToolDef, settings ReadFileToolConfig)
 			content = string(bytes)
 			truncated = true
 		}
-		resultPath := fullPath
-		if root == "skills" {
-			resultPath = localReadableResultPath(root, localContext.Workspace, settings.SkillsRoot, fullPath)
-		}
 		return ToolResult{Value: map[string]any{
 			"path":       resultPath,
 			"encoding":   "utf-8",
@@ -97,4 +121,49 @@ func NewLocalReadFileToolWithConfig(schema ToolDef, settings ReadFileToolConfig)
 			"bytes":      len([]byte(content)),
 		}}, nil
 	})
+}
+
+type localReadDispatch struct {
+	Tool     string
+	Reason   string
+	Encoding string
+}
+
+// localReadFileDispatch decides whether a path needs a non-text reader. It
+// runs BEFORE the file is read, so the actual bytes never enter context. When
+// it returns non-nil, read_file emits a `deferred_to` payload that tells the
+// model which tool to call next (image_vqa for images, document_parser for
+// PDFs/Office documents, the http `fetch_url` for HTML).
+func localReadFileDispatch(fullPath string) *localReadDispatch {
+	ext := strings.ToLower(filepath.Ext(fullPath))
+	mimeType := mime.TypeByExtension(ext)
+
+	switch {
+	case isImageExt(ext):
+		return &localReadDispatch{Tool: "image_vqa", Reason: "an image", Encoding: "binary"}
+	case isDocumentExt(ext):
+		return &localReadDispatch{Tool: "document_parser", Reason: "a structured document", Encoding: "binary"}
+	case ext == ".html" || ext == ".htm":
+		return &localReadDispatch{Tool: "fetch_url", Reason: "an HTML document", Encoding: "text/html"}
+	case mimeType != "" && !strings.HasPrefix(mimeType, "text/") && !strings.HasPrefix(mimeType, "application/json"):
+		// Unknown binary content — refuse to dump it into context.
+		return &localReadDispatch{Tool: "bash", Reason: fmt.Sprintf("a non-text file (%s)", mimeType), Encoding: "binary"}
+	}
+	return nil
+}
+
+func isImageExt(ext string) bool {
+	switch ext {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif", ".heic":
+		return true
+	}
+	return false
+}
+
+func isDocumentExt(ext string) bool {
+	switch ext {
+	case ".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx":
+		return true
+	}
+	return false
 }

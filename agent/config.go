@@ -97,6 +97,17 @@ type ToolRuntimeConfig struct {
 	RetryCount  int                            `json:"retry_count"`
 }
 
+// BashPolicyConfig is the on-disk representation of the bash policy. An
+// empty struct means "use the hard-coded defaults from
+// local.DefaultBashPolicy()"; users opt out by setting `enabled: false`.
+type BashPolicyConfig struct {
+	Enabled        bool     `json:"enabled"`
+	AllowCommands  []string `json:"allow_commands"`
+	DenyCommands   []string `json:"deny_commands"`
+	DenyPaths      []string `json:"deny_paths"`
+	StrictDenyOnly bool     `json:"strict_deny_only"`
+}
+
 type LocalExecutableConfig struct {
 	Python  string `json:"python"`
 	Shell   string `json:"shell"`
@@ -125,6 +136,7 @@ type Config struct {
 	Gateway                GatewayConfig        `json:"unifiedToolService"`
 	HTTPTools              map[string]ToolEntry `json:"httpTools"`
 	ToolRuntime            *ToolRuntimeConfig   `json:"tool_runtime,omitempty"`
+	BashPolicy             BashPolicyConfig     `json:"bash_policy,omitempty"`
 	ToolsSchemas           string               `json:"tools_schemas"`
 	MaxSteps               int                  `json:"max_steps"`
 	SummaryThresholdTokens int                  `json:"summary_threshold_tokens"`

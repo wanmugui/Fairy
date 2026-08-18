@@ -72,7 +72,7 @@
   },
   "bash": {
     "name": "bash",
-    "description": "Run a shell command inside the backend sandbox environment. The sandbox cannot directly access the external internet; do not use this tool for curl/wget/git clone/pip install or other network retrieval.",
+    "description": "Run a shell command inside the backend sandbox environment. The sandbox cannot directly access the external internet; do not use this tool for curl/wget/git clone/pip install or other network retrieval. Set run_in_background=true to spawn a long-running job; the tool returns a job_id you can read or kill with the bash_job tool.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -83,10 +83,47 @@
         "timeout": {
           "type": "integer",
           "description": "Optional timeout in seconds (5-600, default 120). For long-running commands, pass a larger timeout so the process is not killed early."
+        },
+        "run_in_background": {
+          "type": "boolean",
+          "description": "When true, spawn the command as a detached job and return immediately with a job_id. Use the bash_job tool to read output or kill it. Ignored when the command is short-lived."
+        },
+        "working_dir": {
+          "type": "string",
+          "description": "Optional working directory. Absolute or relative; relative resolves against the workspace. Defaults to the workspace root."
+        },
+        "escalate": {
+          "type": "boolean",
+          "description": "When true, bypass the bash policy deny list (destructive commands / protected paths) for this call. The escalation is recorded in the result so the caller can audit what was overridden. Use sparingly and pair with a one-line justification in the message body."
         }
       },
       "required": [
         "command"
+      ]
+    }
+  },
+  "bash_job": {
+    "name": "bash_job",
+    "description": "Interact with a background bash job started by the bash tool with run_in_background=true. Use action=status to check whether the job is still running, action=read to tail the latest output, action=kill to terminate it.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "description": "The job_id returned by the original bash run_in_background call."
+        },
+        "action": {
+          "type": "string",
+          "enum": ["status", "read", "kill"],
+          "description": "What to do with the job. Default: status."
+        },
+        "tail_lines": {
+          "type": "integer",
+          "description": "For action=read, how many trailing lines to return from stdout/stderr. Default 200."
+        }
+      },
+      "required": [
+        "job_id"
       ]
     }
   },
@@ -229,6 +266,38 @@
     "parameters": {
       "type": "object",
       "properties": {}
+    }
+  },
+  "grep": {
+    "name": "grep",
+    "description": "Search for a regex pattern across files under a workspace path. Uses ripgrep when available and falls back to a built-in Go walker otherwise. Returns file:line:match hits, ordered by file walk order. Use this when you know what you're looking for and the filename or path is unknown; pair it with glob to find files first when the search space is large.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Regular expression (Go RE2 syntax) to search for. Special regex characters must be escaped when you want a literal match."
+        },
+        "path": {
+          "type": "string",
+          "description": "Workspace-relative directory to search under. Defaults to the workspace root."
+        },
+        "glob": {
+          "type": "string",
+          "description": "Optional glob filter applied to file basenames (e.g. '*.go'). Leave empty to scan every file."
+        },
+        "case_insensitive": {
+          "type": "boolean",
+          "description": "When true, match case-insensitively. Default false."
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Upper bound on the number of hits returned. Default 200."
+        }
+      },
+      "required": [
+        "pattern"
+      ]
     }
   },
   "glob": {
@@ -630,6 +699,22 @@
       },
       "required": [
         "updates"
+      ]
+    }
+  },
+  "web_fetch": {
+    "name": "web_fetch",
+    "description": "Fetch a single URL and return its text. Uses HTTP(S) GET with size cap (5MB) and timeout (30s). HTML responses are converted to readable text (tags stripped, paragraphs preserved). Use this AFTER web_search to read a candidate page; do NOT use it for discovery.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Absolute http(s) URL to fetch. Must start with http:// or https://."
+        }
+      },
+      "required": [
+        "url"
       ]
     }
   },

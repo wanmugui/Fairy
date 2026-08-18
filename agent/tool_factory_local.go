@@ -3,6 +3,8 @@ package main
 import (
 	"agentloop/agent/internal/biz/tool/builtin"
 	localtool "agentloop/agent/internal/biz/tool/local"
+	"agentloop/agent/internal/biz/tool/webfetch"
+	"agentloop/agent/internal/biz/tool/websearch"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -28,6 +30,9 @@ func builtinLocalToolBuilders() map[string]LocalToolBuilder {
 		},
 		"glob": func(schema ToolDef, cfg *Config) (Tool, error) {
 			return builtin.NewLocalGlobToolWithConfig(schema, configuredSkillsRoot(cfg)), nil
+		},
+		"grep": func(schema ToolDef, _ *Config) (Tool, error) {
+			return builtin.NewLocalGrepTool(schema), nil
 		},
 		"get_current_time": func(schema ToolDef, _ *Config) (Tool, error) {
 			return builtin.NewLocalTimeTool(schema), nil
@@ -56,6 +61,15 @@ func builtinLocalToolBuilders() map[string]LocalToolBuilder {
 		"bash": func(schema ToolDef, cfg *Config) (Tool, error) {
 			return localtool.NewLocalBashTool(schema, localToolConfig(cfg)), nil
 		},
+		"bash_job": func(schema ToolDef, cfg *Config) (Tool, error) {
+			return localtool.NewLocalBashJobTool(schema, localToolConfig(cfg)), nil
+		},
+		"web_search": func(schema ToolDef, _ *Config) (Tool, error) {
+			return websearch.NewTool(schema), nil
+		},
+		"web_fetch": func(schema ToolDef, _ *Config) (Tool, error) {
+			return webfetch.NewTool(schema), nil
+		},
 		"html_to_png": func(schema ToolDef, cfg *Config) (Tool, error) {
 			return localtool.NewLocalHTMLToPNGTool(schema, localToolConfig(cfg)), nil
 		},
@@ -78,6 +92,7 @@ func localToolConfig(cfg *Config) *localtool.Config {
 		ConfigPath: cfg.ConfigPath,
 		SkillsRoot: configuredSkillsRoot(cfg),
 		UseMock:    cfg.UseMock,
+		BashPolicy: resolveBashPolicy(cfg.BashPolicy),
 		PptTools: localtool.PptToolsConfig{
 			BaseURL: cfg.Tools.PptTools.BaseUrl,
 			APIPath: cfg.Tools.PptTools.ApiPath,
@@ -91,6 +106,30 @@ func localToolConfig(cfg *Config) *localtool.Config {
 		BuildSubtaskPrompt: func(task string) (string, error) {
 			return renderLocalSubtaskPrompt(cfg, task)
 		},
+	}
+}
+
+// resolveBashPolicy turns the on-disk BashPolicyConfig into a runtime
+// localtool.BashPolicy. When the policy is disabled we return an empty
+// (allow-all) policy so the agent has zero friction.
+func resolveBashPolicy(cfg BashPolicyConfig) localtool.BashPolicy {
+	if !cfg.Enabled {
+		return localtool.BashPolicy{}
+	}
+	denyCommands := cfg.DenyCommands
+	denyPaths := cfg.DenyPaths
+	if !cfg.StrictDenyOnly && len(denyCommands) == 0 && len(denyPaths) == 0 {
+		// Use the conservative defaults when the user enabled the policy
+		// but didn't customize it. This matches the documented "open by
+		// default unless you turn it on" semantics.
+		def := localtool.DefaultBashPolicy()
+		denyCommands = def.DenyCommands
+		denyPaths = def.DenyPaths
+	}
+	return localtool.BashPolicy{
+		AllowCommands: cfg.AllowCommands,
+		DenyCommands:  denyCommands,
+		DenyPaths:     denyPaths,
 	}
 }
 

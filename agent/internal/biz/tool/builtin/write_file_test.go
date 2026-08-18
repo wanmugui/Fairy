@@ -24,9 +24,12 @@ func TestLocalWriteFileCreatesParentAndReturnsRelativePath(t *testing.T) {
 	}
 }
 
-func TestLocalWriteFileRejectsBundledSkillPath(t *testing.T) {
+func TestLocalWriteFileAllowsBundledSkillPath(t *testing.T) {
+	// Post-loosen: bundled-skill paths are writable when the agent supplies an
+	// absolute /skills target. The skill-vs-workspace distinction is now
+	// informational, not a containment boundary.
 	result := executeLocalFileTool(t, NewLocalWriteFileTool(localFileTestSchema("write_file")), t.TempDir(), `{"file_path":"local:///skills/ppt-maker/SKILL.md","content":"changed"}`)
-	if !result.IsError || result.Value["error"] == nil {
-		t.Fatalf("expected bundled skill write to be rejected, got %#v", result)
+	if result.IsError {
+		t.Fatalf("expected bundled skill write to succeed, got %#v", result.Value)
 	}
 }

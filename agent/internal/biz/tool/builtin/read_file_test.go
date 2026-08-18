@@ -96,3 +96,31 @@ func TestLocalReadFileReadsBundledSkillThroughProductionPath(t *testing.T) {
 		t.Fatalf("legacy registry path must remain readable: %#v", result.Value)
 	}
 }
+
+func TestLocalReadFileDispatchesBinaryTargets(t *testing.T) {
+	workspace := t.TempDir()
+	pngPath := filepath.Join(workspace, "shot.png")
+	if err := os.WriteFile(pngPath, []byte{0x89, 0x50, 0x4E, 0x47}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pdfPath := filepath.Join(workspace, "report.pdf")
+	if err := os.WriteFile(pdfPath, []byte("%PDF-1.4\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tool := NewLocalReadFileTool(localFileTestSchema("read_file"))
+
+	pngResult := executeLocalFileTool(t, tool, workspace, `{"file_path":"shot.png"}`)
+	if pngResult.IsError {
+		t.Fatalf("unexpected error: %#v", pngResult.Value)
+	}
+	deferred, ok := pngResult.Value["deferred_to"].(map[string]any)
+	if !ok || deferred["tool"] != "image_vqa" {
+		t.Fatalf("expected deferred_to=image_vqa, got %#v", pngResult.Value)
+	}
+
+	pdfResult := executeLocalFileTool(t, tool, workspace, `{"file_path":"report.pdf"}`)
+	deferred, ok = pdfResult.Value["deferred_to"].(map[string]any)
+	if !ok || deferred["tool"] != "document_parser" {
+		t.Fatalf("expected deferred_to=document_parser, got %#v", pdfResult.Value)
+	}
+}
