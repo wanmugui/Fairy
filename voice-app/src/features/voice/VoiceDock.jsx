@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { sendChat, normalizeServiceMessages, extractAssistantContent, fetchSessions, fetchModels, fetchSystemPrompt } from '../../api/chat';
+import { sendChat, normalizeServiceMessages, extractAssistantContent, fetchSessions, fetchSessionHistory, fetchModels, fetchSystemPrompt } from '../../api/chat';
 
 function readableText(content) {
   if (!content) return '';
@@ -71,7 +71,16 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
   const scrollRef = useRef(null);
   const promptBodyRef = useRef(null);
 
-  // Probe the agent API so the HUD can show link state.
+  const loadSessions = () => {
+    setSessionsLoading(true);
+    fetchSessions().then(list => { setSessions(list || []); setSessionsLoading(false); }).catch(() => setSessionsLoading(false));
+  };
+
+  const handleSelectSession = (name) => {
+    setMenuOpen(false);
+    setTranscript([]);
+    if (onSelectSession) onSelectSession(name);
+  };
   useEffect(() => {
     fetchModels()
       .then(list => { setModels(list || []); setAgentOnline(true); })
@@ -298,11 +307,6 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
     if (next) setMenuPanel('current');
   };
 
-  const loadSessions = () => {
-    setSessionsLoading(true);
-    fetchSessions().then(list => { setSessions(list || []); setSessionsLoading(false); }).catch(() => setSessionsLoading(false));
-  };
-
   const techStatus = STATUS_TECH[status] || 'STANDBY';
 
   return (
@@ -418,7 +422,7 @@ export default function VoiceDock({ model, sessionName, muted: mutedProp, onTurn
                 {sessionsLoading ? <div className="voice-dock-menu-empty">加载中...</div> : null}
                 {!sessionsLoading && sessions.length === 0 ? <div className="voice-dock-menu-empty">暂无历史会话</div> : null}
                 {sessions.map(s => (
-                  <button key={s.name} type="button" className="voice-dock-menu-item" onClick={() => { setMenuOpen(false); if (onSelectSession) onSelectSession(s.name); }}>
+                  <button key={s.name} type="button" className="voice-dock-menu-item" onClick={() => handleSelectSession(s.name)}>
                     <span className="voice-dock-menu-item-name">{s.name}</span>
                     <span className="voice-dock-menu-item-meta">{s.message_count} 条 · {s.modified ? s.modified.slice(11, 19) : ''}</span>
                   </button>

@@ -1,5 +1,6 @@
 // ── Voice app API helpers ──
 const BASE = '/api';
+const DSH_BASE = 'http://localhost:3080/api';
 
 export async function fetchModels() {
   const r = await fetch(BASE + '/models');
@@ -7,8 +8,47 @@ export async function fetchModels() {
 }
 
 export async function fetchSessions() {
-  const r = await fetch(BASE + '/sessions');
-  return r.json();
+  // Fetch from dsh web API
+  try {
+    const r = await fetch(DSH_BASE + '/session.list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'client-request',
+        rpcId: 'sessions-' + Date.now(),
+        method: 'session.list',
+        payload: { args: {} },
+      }),
+    });
+    if (!r.ok) throw new Error('failed');
+    const data = await r.json();
+    // Extract sessions from dsh response format
+    const items = data?.result?.value?.items || [];
+    return items.map(s => ({
+      name: s.projections?.values?.title || s.sessionId,
+      sessionId: s.sessionId,
+      message_count: s.projections?.values?.sessionStats?.turns || 0,
+      modified: new Date(s.updatedAt).toISOString(),
+      blank: s.blank,
+    }));
+  } catch (e) {
+    console.error('fetchSessions error:', e);
+    return [];
+  }
+}
+
+export async function fetchSessionHistory(sessionId) {
+  try {
+    const r = await fetch(DSH_BASE + '/session.history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+    if (!r.ok) throw new Error('failed');
+    return await r.json();
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchSystemPrompt() {

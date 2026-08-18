@@ -242,8 +242,31 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (req.method === 'GET' && url.pathname === '/api/sessions') {
+    const sessions = [];
+    const root = sessionRootPath();
+    if (fs.existsSync(root)) {
+      try {
+        const dirs = fs.readdirSync(root, { withFileTypes: true });
+        for (const dir of dirs) {
+          if (dir.isDirectory()) {
+            const metaPath = path.join(root, dir.name, 'meta.json');
+            if (fs.existsSync(metaPath)) {
+              try {
+                const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+                sessions.push({
+                  name: dir.name,
+                  message_count: meta.message_count || 0,
+                  modified: meta.modified || dir.name,
+                });
+              } catch {}
+            }
+          }
+        }
+      } catch {}
+    }
+    sessions.sort((a, b) => (b.modified || '').localeCompare(a.modified || ''));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end('[]');
+    res.end(JSON.stringify(sessions));
     return;
   }
   if (req.method === 'GET' && url.pathname === '/api/system-prompt') {
