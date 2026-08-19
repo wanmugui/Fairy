@@ -140,6 +140,7 @@ type Config struct {
 	ToolsSchemas           string               `json:"tools_schemas"`
 	MaxSteps               int                  `json:"max_steps"`
 	SummaryThresholdTokens int                  `json:"summary_threshold_tokens"`
+	SummaryRetainTokens    int                  `json:"summary_retain_tokens"`
 	MaxNetworkCalls        int                  `json:"max_network_calls"`
 	ConfigPath             string               `json:"-"`
 	RepoRoot               string               `json:"-"`
@@ -176,6 +177,9 @@ func LoadConfig(repoRoot, configPath string) (*Config, error) {
 	}
 	if cfg.SummaryThresholdTokens <= 0 {
 		cfg.SummaryThresholdTokens = 60000
+	}
+	if cfg.SummaryRetainTokens <= 0 {
+		cfg.SummaryRetainTokens = 12000
 	}
 	if cfg.MaxNetworkCalls < 0 {
 		cfg.MaxNetworkCalls = 20

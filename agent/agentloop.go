@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,6 +12,20 @@ import (
 
 	"agentloop/agent/internal/biz/tool/httptool"
 )
+
+func estimateMessageTokens(m Message) int {
+	n := len(m.Content)/3 + 4
+	if len(m.ToolCalls) > 0 {
+		for _, tc := range m.ToolCalls {
+			n += len(tc.Function.Arguments)/3 + 8
+		}
+	}
+	return n
+}
+
+func isSummaryMarker(m Message) bool {
+	return strings.HasPrefix(strings.TrimSpace(m.Content), "<summary>")
+}
 
 type SessionUsage struct {
 	PromptTokens     int   `json:"prompt_tokens"`
@@ -162,12 +175,6 @@ func RunAgentLoop(
 	// Prevents runaway research loops (observed 32x web_search + 35x fetch_url in one deep-research subtask).
 	networkCalls := 0
 
-	// Adaptive compression ratio: how much of the history gets summarized per
-	// compression. Compress MORE when we keep hitting the threshold too often
-	// (e.g. every tool call), compress LESS when there is comfortable headroom,
-	// so as much recent info as possible stays verbatim. Bounded to [0.70, 0.95].
-	compressionRatio := 0.8
-	lastCompressStep := 0
 	lastTruncated := false // previous response hit max_tokens (output cut)
 
 	step := 0
@@ -500,25 +507,31 @@ func RunAgentLoop(
 
 		// Emit summary compression status
 		if summaryPrompt != "" && lastPromptTokens > cfg.SummaryThresholdTokens {
-			if lastCompressStep > 0 {
-				stepsSinceCompress := step - lastCompressStep
-				if stepsSinceCompress <= 2 {
-					compressionRatio = math.Min(0.95, compressionRatio+0.05)
-				} else if stepsSinceCompress >= 8 {
-					compressionRatio = math.Max(0.70, compressionRatio-0.02)
-				}
-			}
-			lastCompressStep = step
 			emitEvent("status", map[string]interface{}{"step": step, "message": "正在压缩历史上下文..."})
 
 			// Default compress window: everything after the system prompt.
-			// Compress `compressionRatio` of history (the recent tail stays verbatim
-			// for information completeness); the ratio adapts up/down automatically.
+			// The recent tail stays verbatim for information completeness.
 			compressStart := 1
-			compressEnd := int(math.Max(1, math.Min(
-				float64(len(messages)-1)*compressionRatio,
-				float64(len(messages)-2),
-			)))
+			// Retain-tail budget: keep the most recent SummaryRetainTokens verbatim.
+			// If the whole active window still fits inside the budget, skip compression.
+			compressEnd := len(messages) - 2
+			budgetReached := false
+			{
+				tailTokens := 0
+				for i := len(messages) - 1; i >= 1; i-- {
+					tailTokens += estimateMessageTokens(messages[i])
+					if tailTokens >= cfg.SummaryRetainTokens {
+						compressEnd = i - 1
+						budgetReached = true
+						break
+					}
+				}
+				if !budgetReached {
+					compressEnd = 1
+				} else if compressEnd < 1 {
+					compressEnd = 1
+				}
+			}
 
 			// Preserve user intent: never compress the most recent user message.
 			// Walk back from the cut point and move the boundary before the last
@@ -579,8 +592,6 @@ func RunAgentLoop(
 			// Only compress when the segment is worth it (avoids churn on small contexts)
 			if compressEnd-compressStart >= 4 {
 				compressMsgs := messages[compressStart : compressEnd+1]
-				keepMsgs := append([]Message{}, messages[:compressStart]...)
-				keepMsgs = append(keepMsgs, messages[compressEnd+1:]...)
 
 				// Send the original messages verbatim (preserving tool_calls / tool_call_id / name),
 				// so the summary request is a valid API payload. CallLLM strips usage/duration_ms.
@@ -611,23 +622,35 @@ func RunAgentLoop(
 				}
 				if summaryText != "" {
 					summaryMsg := NewMessage("assistant", "<summary>\n"+summaryText+"\n</summary>", nil, "", "")
-					// Keep the full conversation in `messages` for frontend rendering:
-					// insert the summary as a marker at the compress boundary but never
-					// delete the original messages. Only the AI working view shrinks.
-					messages = append(messages[:compressEnd+1], summaryMsg)
-					messages = append(messages, keepMsgs[compressStart:]...)
+					// Replaceable checkpoint: drop any prior <summary> markers from
+					// the kept spans, then insert the new summary once at the boundary.
+					prefixMsgs := make([]Message, 0, compressStart)
+					for _, m := range messages[:compressStart] {
+						if !isSummaryMarker(m) {
+							prefixMsgs = append(prefixMsgs, m)
+						}
+					}
+					tailMsgs := make([]Message, 0, len(messages)-compressEnd-1)
+					for _, m := range messages[compressEnd+1:] {
+						if !isSummaryMarker(m) {
+							tailMsgs = append(tailMsgs, m)
+						}
+					}
+					messages = append([]Message{}, prefixMsgs...)
+					messages = append(messages, summaryMsg)
+					messages = append(messages, tailMsgs...)
 
 					// Rebuild the AI working view: system + summary + tail (tail kept
 					// verbatim for information completeness - only the past is
 					// compressed, recent messages are never trimmed).
-					workingMsgs = append([]Message{}, messages[:compressStart]...)
+					workingMsgs = append([]Message{}, prefixMsgs...)
 					workingMsgs = append(workingMsgs, summaryMsg)
 					// Inject a machine-generated handoff note so later turns know
 					// which deliverables are already done and never redo them.
 					if len(deliveredItems) > 0 {
 						workingMsgs = append(workingMsgs, NewMessage("user", deliveredStatusText(deliveredItems), nil, "", ""))
 					}
-					workingMsgs = append(workingMsgs, keepMsgs[compressStart:]...)
+					workingMsgs = append(workingMsgs, tailMsgs...)
 					// qn/Claude-compatible gateways require the LAST message to be
 					// role=user. After compression the tail may end on a tool result
 					// or an assistant message; append a neutral user prompt so the
