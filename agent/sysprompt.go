@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -15,7 +16,13 @@ import (
 // are intentionally NOT appended here: the agent reads SKILL.md on demand via
 // read_file when a registry entry matches (see the skill-registry block).
 func BuildSystemPrompt(cfg *Config) string {
-	tmpl := readTextFile(cfg.SystemPath())
+	tmpl := ""
+	if useModularSystemParts(cfg) {
+		tmpl = assembleSystemPrompt(cfg)
+	}
+	if tmpl == "" {
+		tmpl = readTextFile(cfg.SystemPath())
+	}
 	if tmpl == "" {
 		tmpl = "You are a helpful assistant."
 	}
@@ -33,7 +40,87 @@ func BuildSystemPrompt(cfg *Config) string {
 	return rendered
 }
 
-// systemTemplateVars maps runtime config to the template feature flags.
+// useModularSystemParts enables parts assembly only for the default modular
+// system prompt files; custom system_path values keep their single-file behavior.
+func useModularSystemParts(cfg *Config) bool {
+	if cfg == nil || strings.TrimSpace(cfg.SystemPartsDir) == "" {
+		return false
+	}
+	path := strings.ReplaceAll(strings.TrimSpace(cfg.SystemPath()), "\\", "/")
+	return strings.HasSuffix(path, "config/locales/system/zh.md") || strings.HasSuffix(path, "config/locales/system/en.md")
+}
+
+// assembleSystemPrompt builds the modular system prompt from parts/{lang}/
+// using manifest.yml ordering when available. Falls back to sorted .md files.
+func assembleSystemPrompt(cfg *Config) string {
+	if cfg == nil || strings.TrimSpace(cfg.SystemPartsDir) == "" {
+		return ""
+	}
+	partsDir := cfg.ResolvePath(cfg.SystemPartsDir)
+	manifestPath := filepath.Join(filepath.Dir(partsDir), "manifest.yml")
+	lang := filepath.Base(partsDir)
+	var names []string
+	if data, err := os.ReadFile(manifestPath); err == nil {
+		names = systemPromptManifestNames(string(data), lang)
+	}
+	if len(names) == 0 {
+		entries, err := os.ReadDir(partsDir)
+		if err != nil {
+			return ""
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".md") {
+				names = append(names, entry.Name())
+			}
+		}
+		sort.Strings(names)
+	}
+	var builder strings.Builder
+	for _, name := range names {
+		if name == "" || strings.Contains(name, "..") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(partsDir, name))
+		if err != nil {
+			continue
+		}
+		content := strings.TrimSpace(strings.ReplaceAll(string(data), "\r\n", "\n"))
+		if content == "" {
+			continue
+		}
+		if builder.Len() > 0 {
+			builder.WriteString("\n\n")
+		}
+		builder.WriteString(content)
+	}
+	return builder.String()
+}
+
+func systemPromptManifestNames(manifest, lang string) []string {
+	var names []string
+	inSection := false
+	for _, raw := range strings.Split(manifest, "\n") {
+		line := strings.TrimSpace(raw)
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasSuffix(line, ":") && strings.TrimSuffix(line, ":") == lang {
+			inSection = true
+			continue
+		}
+		if inSection {
+			if strings.HasPrefix(line, "- ") {
+				names = append(names, strings.TrimSpace(strings.TrimPrefix(line, "- ")))
+				continue
+			}
+			if line != "" {
+				break
+			}
+		}
+	}
+	return names
+}
+
 func systemTemplateVars(cfg *Config, registryJSON string) map[string]any {
 	tool := func(name string) bool {
 		if t, ok := cfg.HTTPTools[name]; ok {
