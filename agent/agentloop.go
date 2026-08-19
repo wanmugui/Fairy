@@ -172,6 +172,7 @@ func RunAgentLoop(
 	perMsgUsage := make(map[int]*PerMsgUsageEntry)
 	postReflection := false // Track if reflection has been injected
 	lastPromptTokens := 0   // prompt tokens of the last LLM call (context size)
+	executionNudges := 0    // times the loop nudged a no-tool tutorial back to execution
 
 	sessionUsage := &SessionUsage{}
 	if initialSessionUsage != nil {
@@ -329,6 +330,15 @@ func RunAgentLoop(
 
 		// Process tool calls
 		if !hasToolCalls {
+			// If the request was actionable but the model only produced a generic
+			// tutorial, nudge it back into tool execution before finalizing.
+			if executionNudges < 2 && shouldNudgeToExecute(messages, resp.Content) {
+				executionNudges++
+				emitEvent("status", map[string]interface{}{"step": step, "message": "检测到只给了方案，正在提醒直接执行..."})
+				workingMsgs = append(workingMsgs, NewMessage("user", "你刚才只给了说明，没有实际动手。请先读取相关文件并直接修改验证，禁止只给方案/示例。", nil, "", ""))
+				continue
+			}
+
 			// No tool calls - check if we should inject reflection first
 			if reflectionPrompt != "" && cfg.Reflection.Enabled && !postReflection {
 				// Inject reflection prompt as a system message for self-check
@@ -811,6 +821,50 @@ func SaveUsage(sessionFile string, usage *SessionUsage, messages []Message, perM
 		return err
 	}
 	return os.WriteFile(usageFile, data, 0644)
+}
+
+// shouldNudgeToExecute detects an actionable change request answered with a
+// generic tutorial instead of tool calls, so the loop can force another pass.
+func shouldNudgeToExecute(messages []Message, content string) bool {
+	lastUser := ""
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			lastUser = messages[i].Content
+			break
+		}
+	}
+	if lastUser == "" {
+		return false
+	}
+	lower := strings.ToLower(lastUser)
+	actionable := false
+	for _, keyword := range []string{"修改", "改成", "修复", "添加", "删除", "创建"} {
+		if strings.Contains(lower, keyword) {
+			actionable = true
+			break
+		}
+	}
+	if !actionable && strings.Contains(lower, "实现") && (strings.Contains(lower, "项目") || strings.Contains(lower, "文件")) {
+		actionable = true
+	}
+	if !actionable {
+		return false
+	}
+	if strings.Contains(lower, "解释") || strings.Contains(lower, "说明") || strings.Contains(lower, "怎么做") {
+		return false
+	}
+	return looksLikeGenericTutorial(content)
+}
+
+func looksLikeGenericTutorial(content string) bool {
+	lower := strings.ToLower(content)
+	markers := []string{"通常需要", "假设前提", "以 react", "以 vue", "以 angular", "示例代码", "教程", "让用户自己去", "你可以按照", "需要在前端代码"}
+	for _, marker := range markers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return len(content) > 400 && strings.Contains(content, "```")
 }
 
 // truncateStr truncates a string to maxLen chars
