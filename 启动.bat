@@ -22,7 +22,7 @@ if not defined NODE_CMD goto :fail_node
 :have_node
 echo [OK] node: %NODE_CMD%
 
-rem ---------- 2. pnpm: bundled pnpm.mjs preferred; fall back to npm (bundled) ----------
+rem ---------- 2. pnpm: system pnpm preferred; fall back to bundled pnpm.mjs / npm ----------
 set "NODE_DIR="
 for /f "delims=" %%i in ("%NODE_CMD%") do set "NODE_DIR=%%~dpi"
 rem %%~dpi ends with a backslash; strip it so quoted args never see a
@@ -49,7 +49,8 @@ set "PATH=%NODE_DIR%;%PATH%"
 rem ---------- 4. Python venv: create if missing ----------
 if exist ".tools\venv\Scripts\python.exe" goto :have_python
 echo [..] Python venv missing, provisioning with setup:python...
-if exist "%PNPM_MJS%" goto :setup_py_pnpm
+if defined PNPM_CMD goto :setup_py_pnpm
+if exist "%PNPM_MJS%" goto :setup_py_pnpm
 if exist "%NPM_CLI%" goto :setup_py_npm
 goto :have_python
 :setup_py_pnpm
@@ -69,7 +70,8 @@ echo    Frontend: http://localhost:5173
 echo ===================================
 echo  Close this window to stop.
 echo.
-if exist "%PNPM_MJS%" goto :run_dev_pnpm
+if defined PNPM_CMD goto :run_dev_pnpm
+if exist "%PNPM_MJS%" goto :run_dev_pnpm
 if exist "%NPM_CLI%" goto :run_dev_npm
 goto :fail_no_pkg
 
