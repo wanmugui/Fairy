@@ -266,7 +266,7 @@
     }
   ],
   "reflection": {
-    "enabled": false
+    "enabled": true
   },
   "tools": {
     "_comment": "生产工具配置兼容字段。当前本地 Agent 直接消费 readFile；pptTools（如配置）会传给本地环境工具。其余服务能力通过 unifiedToolService 调用，不再自动转换为旧 TOOL_* 子进程环境变量。",
