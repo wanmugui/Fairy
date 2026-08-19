@@ -226,6 +226,14 @@ func RunAgentLoop(
 			return nil, fmt.Errorf("API call at step %d: %w", step, err)
 		}
 		lastTruncated = resp.Usage != nil && cfg.API.MaxTokens > 0 && resp.Usage.CompletionTokens >= cfg.API.MaxTokens
+		// Some providers emit functions.name({...}) as plain text instead of native
+		// tool_calls. Convert those into real ToolCalls so the loop keeps executing.
+		if len(resp.ToolCalls) == 0 {
+			if calls, cleaned := extractInlineToolCalls(resp.Content); len(calls) > 0 {
+				resp.ToolCalls = calls
+				resp.Content = strings.TrimSpace(cleaned)
+			}
+		}
 
 		// Track usage
 		if resp.Usage != nil {
@@ -415,6 +423,9 @@ func RunAgentLoop(
 			})
 		}
 
+		if snapshots := snapshotFilesForRollback(cfg, invocations); len(snapshots) > 0 {
+			emitEvent("status", map[string]interface{}{"step": step, "message": "修改前已创建回退快照..."})
+		}
 		dispatchedResults := dispatcher.Execute(context.Background(), invocations)
 		results := make([]ToolInvocationResult, len(resp.ToolCalls))
 		for idx, result := range cappedResults {
@@ -821,6 +832,194 @@ func SaveUsage(sessionFile string, usage *SessionUsage, messages []Message, perM
 		return err
 	}
 	return os.WriteFile(usageFile, data, 0644)
+}
+
+// extractInlineToolCalls parses functions.name({...}) blocks some providers emit
+// as text, returning native ToolCalls plus the content with those blocks removed.
+// <report> is a final-only terminator and must never be parsed by the backend,
+// so it is left untouched here.
+func extractInlineToolCalls(content string) ([]ToolCall, string) {
+	var calls []ToolCall
+	var cleaned strings.Builder
+	remaining := content
+	id := 0
+	for {
+		idx := strings.Index(remaining, "functions.")
+		if idx < 0 {
+			cleaned.WriteString(remaining)
+			break
+		}
+		cleaned.WriteString(remaining[:idx])
+		rest := remaining[idx+len("functions."):]
+		endName := strings.IndexByte(rest, '(')
+		if endName <= 0 {
+			cleaned.WriteString("functions.")
+			remaining = rest
+			continue
+		}
+		name := strings.TrimSpace(rest[:endName])
+		if name == "" {
+			cleaned.WriteString("functions.")
+			remaining = rest
+			continue
+		}
+		closeIdx := findInlineCallClose(rest, endName+1)
+		if closeIdx < 0 {
+			cleaned.WriteString("functions.")
+			remaining = rest
+			continue
+		}
+		argsRaw := strings.TrimSpace(rest[endName+1 : closeIdx])
+		calls = append(calls, ToolCall{
+			ID:       fmt.Sprintf("call_inline_%d", id),
+			Type:     "function",
+			Function: ToolCallFunc{Name: name, Arguments: argsRaw},
+		})
+		id++
+		remaining = rest[closeIdx+1:]
+	}
+	return calls, cleaned.String()
+}
+
+func findInlineCallClose(rest string, open int) int {
+	depth := 0
+	inString := false
+	escaped := false
+	for i := open; i < len(rest); i++ {
+		c := rest[i]
+		if inString {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if c == '\\' {
+				escaped = true
+				continue
+			}
+			if c == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inString = true
+		case '{', '(':
+			depth++
+		case '}':
+			depth--
+		case ')':
+			if depth == 0 {
+				return i
+			}
+			depth--
+		}
+	}
+	return -1
+}
+
+// snapshotFilesForRollback copies files targeted by write/edit calls into
+// runs/rollback/<timestamp>/ so the user can restore the pre-change state.
+func snapshotFilesForRollback(cfg *Config, invocations []ToolInvocation) []string {
+	if cfg == nil || cfg.RepoRoot == "" {
+		return nil
+	}
+	var targets []string
+	for _, invocation := range invocations {
+		name := strings.ToLower(invocation.Name)
+		if name != "write_file" && name != "edit_file" {
+			continue
+		}
+		var args struct {
+			FilePath string `json:"file_path"`
+		}
+		if err := json.Unmarshal(invocation.Args, &args); err != nil || strings.TrimSpace(args.FilePath) == "" {
+			continue
+		}
+		absPath, err := resolveRollbackPath(cfg, args.FilePath)
+		if err != nil {
+			continue
+		}
+		info, statErr := os.Stat(absPath)
+		if statErr != nil || info.IsDir() {
+			continue
+		}
+		targets = append(targets, absPath)
+	}
+	if len(targets) == 0 {
+		return nil
+	}
+	rollbackRoot := filepath.Join(cfg.RepoRoot, "runs", "rollback", time.Now().Format("20060102_150405"))
+	manifest := make(map[string]string)
+	for _, absPath := range targets {
+		rel, relErr := filepath.Rel(cfg.RepoRoot, absPath)
+		if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			rel = strings.Trim(strings.ReplaceAll(absPath, ":", ""), string(filepath.Separator))
+		}
+		target := filepath.Join(rollbackRoot, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			continue
+		}
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			continue
+		}
+		if err := os.WriteFile(target, data, 0o644); err != nil {
+			continue
+		}
+		manifest[absPath] = target
+	}
+	if len(manifest) > 0 {
+		raw, _ := json.MarshalIndent(manifest, "", "  ")
+		_ = os.WriteFile(filepath.Join(rollbackRoot, "manifest.json"), raw, 0o644)
+	}
+	keys := make([]string, 0, len(manifest))
+	for key := range manifest {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func resolveRollbackPath(cfg *Config, requested string) (string, error) {
+	lower := strings.ToLower(strings.TrimSpace(requested))
+	raw := strings.TrimSpace(requested)
+	if strings.HasPrefix(lower, "memory://") {
+		raw = strings.TrimLeft(raw[len("memory://"):], "/")
+		root := cfg.ResolvePath(cfg.MemoryDir)
+		return resolveWithinRollbackRoot(root, raw)
+	}
+	for _, prefix := range []string{"local://", "knowledge://"} {
+		if strings.HasPrefix(lower, prefix) {
+			raw = raw[len(prefix):]
+			break
+		}
+	}
+	raw = filepath.FromSlash(raw)
+	if !filepath.IsAbs(raw) {
+		raw = filepath.Join(cfg.ResolvePath(cfg.WorkspaceDir), raw)
+	}
+	return filepath.Abs(raw)
+}
+
+func resolveWithinRollbackRoot(root, requested string) (string, error) {
+	if strings.TrimSpace(root) == "" {
+		return "", fmt.Errorf("memory root is not configured")
+	}
+	requested = filepath.FromSlash(strings.TrimSpace(requested))
+	if filepath.IsAbs(requested) {
+		return "", fmt.Errorf("path %q is outside rollback root", requested)
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	full := filepath.Clean(filepath.Join(absRoot, requested))
+	rel, err := filepath.Rel(absRoot, full)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q is outside rollback root", requested)
+	}
+	return full, nil
 }
 
 // shouldNudgeToExecute detects an actionable change request answered with a
