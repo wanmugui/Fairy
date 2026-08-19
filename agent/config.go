@@ -66,6 +66,12 @@ type RerankToolConfig struct {
 	Threshold          float64 `json:"threshold"`
 }
 
+type ToolResultPrunerConfig struct {
+	ThresholdChars int `json:"threshold_chars"`
+	HeadChars      int `json:"head_chars"`
+	TailChars      int `json:"tail_chars"`
+}
+
 // PptToolsToolConfig 是新 PPT skill（ppt-maker 分发到 no-template/template/creative
 // 三个模式）依赖的后端工具网关配置。creative_page_render / html_page_generate /
 // html_page_review / html_to_png / image_filter 均经 POST {baseUrl}{apiPath}
@@ -141,6 +147,7 @@ type Config struct {
 	MaxSteps               int                  `json:"max_steps"`
 	SummaryThresholdTokens int                  `json:"summary_threshold_tokens"`
 	SummaryRetainTokens    int                  `json:"summary_retain_tokens"`
+	ToolResultPruner       ToolResultPrunerConfig `json:"tool_result_pruner,omitempty"`
 	MaxNetworkCalls        int                  `json:"max_network_calls"`
 	ConfigPath             string               `json:"-"`
 	RepoRoot               string               `json:"-"`
@@ -180,6 +187,15 @@ func LoadConfig(repoRoot, configPath string) (*Config, error) {
 	}
 	if cfg.SummaryRetainTokens <= 0 {
 		cfg.SummaryRetainTokens = 12000
+	}
+	if cfg.ToolResultPruner.ThresholdChars <= 0 {
+		cfg.ToolResultPruner.ThresholdChars = 8192
+	}
+	if cfg.ToolResultPruner.HeadChars <= 0 {
+		cfg.ToolResultPruner.HeadChars = 4096
+	}
+	if cfg.ToolResultPruner.TailChars <= 0 {
+		cfg.ToolResultPruner.TailChars = 1024
 	}
 	if cfg.MaxNetworkCalls < 0 {
 		cfg.MaxNetworkCalls = 20

@@ -27,6 +27,31 @@ func isSummaryMarker(m Message) bool {
 	return strings.HasPrefix(strings.TrimSpace(m.Content), "<summary>")
 }
 
+const toolResultPruneMarker = "\n\n[... tool result middle pruned ...]\n\n"
+
+func pruneToolResults(msgs []Message, cfg *Config) bool {
+	threshold := cfg.ToolResultPruner.ThresholdChars
+	headChars := cfg.ToolResultPruner.HeadChars
+	tailChars := cfg.ToolResultPruner.TailChars
+	if threshold <= 0 || headChars < 0 || tailChars < 0 {
+		return false
+	}
+	pruned := false
+	for i := range msgs {
+		m := &msgs[i]
+		if m.Role != "tool" {
+			continue
+		}
+		runes := []rune(m.Content)
+		if len(runes) <= threshold || headChars+tailChars >= len(runes) {
+			continue
+		}
+		m.Content = string(runes[:headChars]) + toolResultPruneMarker + string(runes[len(runes)-tailChars:])
+		pruned = true
+	}
+	return pruned
+}
+
 type SessionUsage struct {
 	PromptTokens     int   `json:"prompt_tokens"`
 	CompletionTokens int   `json:"completion_tokens"`
@@ -508,6 +533,14 @@ func RunAgentLoop(
 		// Emit summary compression status
 		if summaryPrompt != "" && lastPromptTokens > cfg.SummaryThresholdTokens {
 			emitEvent("status", map[string]interface{}{"step": step, "message": "正在压缩历史上下文..."})
+			prunedResults := pruneToolResults(messages, cfg)
+			if pruneToolResults(workingMsgs, cfg) {
+				prunedResults = true
+			}
+			if prunedResults {
+				emitEvent("status", map[string]interface{}{"step": step, "message": "正在裁剪过大的工具结果..."})
+				trace = append(trace, map[string]interface{}{"event": "tool_results_pruned", "step": step})
+			}
 
 			// Default compress window: everything after the system prompt.
 			// The recent tail stays verbatim for information completeness.
