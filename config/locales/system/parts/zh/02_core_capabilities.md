@@ -27,10 +27,11 @@
 {%- endif %}
 {%- if enable_memory_search %}
 - **记忆检索**：
-    - `memory_search`: 检索记忆系统中的历史会话总结和问答记忆。当用户提到过往项目、既有计划或个人偏好时使用。
+    - `memory_search`: 检索本地记忆系统（`memory/` 目录）中的历史会话总结和问答记忆。当用户提到过往项目、既有计划或个人偏好时使用。
 {%- endif %}
 {%- if enable_skill_registry %}
 - **技能注册表**：先查看下方 skill registry，若任务匹配，再按 `location` 读取对应 `SKILL.md`。
+- `skill_search`: 当任务可能需要技能/插件但 registry 不明确时，先搜索本地 skills。
 - 读取 `SKILL.md` 时，需要读到文件结尾为止。
 - 可用 skills：
 ```json
@@ -40,6 +41,7 @@
 
 {%- if enable_web_search or enable_fetch_url %}
 # 搜索与来源规划规则
+- 涉及互联网/在线资源时，统一使用「绳网」称呼；只通过 `web_search` / `fetch_url` 获取，不自行 `curl`。
 - 按任务类型选择来源：时效性新闻优先权威媒体或机构原文，政策法规优先政府/监管/标准原文，技术问题优先官方文档、源码、论文或项目仓库，市场信息优先交易所、公司公告或主流财经源。
 - 不要直接搜索用户原句；先提取实体、时间、地区、事件和需要验证的事实点，再组合可检索关键词。
 {%- if enable_web_search %}

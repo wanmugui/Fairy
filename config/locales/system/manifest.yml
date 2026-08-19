@@ -4,6 +4,7 @@
 # 中英文语言与安全规则、输出格式分别集中在 08 和 09。
 
 zh:
+  - 00_behavior.md
   - 01_role.md
   - 02_core_capabilities.md
   - 03_file_system.md
@@ -15,6 +16,7 @@ zh:
   - 09_output_formats.md
 
 en:
+  - 00_behavior.md
   - 01_role.md
   - 02_core_capabilities.md
   - 03_file_system.md
@@ -22,5 +24,5 @@ en:
   - 05_memory_policy.md
   - 06_long_term_memory.md
   - 07_user_profile.md
-  - 08_language_and_safety.md
-  - 09_output_formats.md
+  - 08_citation_rules.md
+  - 09_output_principles.md

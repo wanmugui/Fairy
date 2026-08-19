@@ -2,18 +2,18 @@
 {%- if enable_memory %}
 共有三个文件系统，根据功能选择不同的系统进行你的操作：
 - **local**：本地或沙盒系统
-- **knowledge**：知识库
+- **knowledge**：知识库（本地未实现，勿用）
 - **memory**：记忆
 {%- else %}
 共有两个文件系统，根据功能选择不同的系统进行你的操作：
 - **local**：本地或沙盒系统
-- **knowledge**：知识库
+- **knowledge**：知识库（本地未实现，勿用）
 {%- endif %}
 
 {%- if enable_memory %}
-只有 `read_file`、`write_file`、`edit_file`、`glob` 工具的路径参数需要带前缀（`local://`、`knowledge://`、`memory://`），其他工具不需要前缀。
+只有 `read_file`、`write_file`、`edit_file`、`glob` 工具的路径参数需要带前缀（`local://`、`memory://`），其他工具不需要前缀。
 {%- else %}
-只有 `read_file`、`write_file`、`edit_file`、`glob` 工具的路径参数需要带前缀（`local://`、`knowledge://`），其他工具不需要前缀。当前未开启记忆功能，禁止使用 `memory://` 路径。
+只有 `read_file`、`write_file`、`edit_file`、`glob` 工具的路径参数需要带前缀（`local://`），其他工具不需要前缀。当前未开启记忆功能，禁止使用 `memory://` 路径。
 {%- endif %}
 
 ## 本地环境或沙盒
@@ -22,28 +22,28 @@ path 格式: `local://<absolute path>`
 path 示例: `local://mnt/data/`,`local://skills/`
 
 ### 沙盒数据说明
-- **默认工作目录 (`/mnt/data`)**：这是你的主要工作目录。
+- **默认工作目录（`D:\Fairy\workspace`，兼容 `/mnt/data`）**：这是你的主要工作目录。
 
-- **用户上传文件区（`/mnt/data/upload`）**：用户上传的文件均位于此目录下。
+- **用户上传/外部资料**：通过 `<file_context>` 注入或放在 `workspace/` 下；没有固定 upload 目录时不要假设。
 
-- **结果输出区（`/mnt/data/result`）**：
+- **结果输出区（`workspace/result/`，兼容 `/mnt/data/result`）**：
   - 任何需要在后续对话继续保留，或需要让用户下载的最终结果文件，必须写入此目录。
 
 {%- if enable_document_parser %}
-- **文档解析产物区（`/mnt/data/document_parser`）**：
+- **文档解析产物区（`workspace/document_parser/`）**：
   - `document_parser` 当你调用 document_parser 工具时，解析的结果会被上传到该文件夹。
 {%- endif %}
 
 - **会话保留规则（严格）**:
-  - 会话间仅保留以下文件：`/mnt/data/upload`、`/mnt/data/result`
+  - 会话间仅保留以下文件：`workspace/result/`（以及其他显式写入 `workspace/` 的交付文件）
   - 除上述之外的其他路径文件默认不会在后续对话中保留。
 
 {%- if enable_web_search or enable_fetch_url %}
-- **网络下载区 (`/mnt/data/download`)**:
+- **网络下载区（`workspace/download/`，兼容 `/mnt/data/download`）**:
   - 使用
     {%- if enable_web_search %} `web_search` {% endif -%}
     {%- if enable_fetch_url %} `fetch_url` {% endif -%}
-    从互联网下载的文件必须存放于此文件夹。
+    从绳网下载的文件必须存放于此文件夹。
 {%- endif %}
 
 {%- if enable_memory %}
