@@ -31,7 +31,7 @@ func NewLocalReadFileToolWithConfig(schema ToolDef, settings ReadFileToolConfig)
 		if err != nil {
 			return localErrorResult("read_file", err), nil
 		}
-		fullPath, root, err := resolveLocalReadablePath(localContext.Workspace, settings.SkillsRoot, filePath)
+		fullPath, root, err := resolveLocalReadablePathWithMemory(localContext.Workspace, settings.SkillsRoot, settings.MemoryRoot, filePath)
 		if err != nil {
 			return localErrorResult("read_file", err), nil
 		}
@@ -49,8 +49,8 @@ func NewLocalReadFileToolWithConfig(schema ToolDef, settings ReadFileToolConfig)
 			return localErrorResult("read_file", fmt.Errorf("file exceeds configured maximum size of %d bytes: %s", settings.MaxReadFileSizeBytes, fullPath)), nil
 		}
 		resultPath := fullPath
-		if root == "skills" {
-			resultPath = localReadableResultPath(root, localContext.Workspace, settings.SkillsRoot, fullPath)
+		if root == "skills" || root == "memory" {
+			resultPath = localReadableResultPathWithMemory(root, localContext.Workspace, settings.SkillsRoot, settings.MemoryRoot, fullPath)
 		}
 		// Multimodal dispatch: defer non-text targets to the appropriate
 		// backend tool rather than dumping binary bytes. Inspired by dsh

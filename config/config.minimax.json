@@ -77,6 +77,9 @@
     "memory_search": {
       "enabled": true
     },
+    "skill_search": {
+      "enabled": true
+    },
     "read_file": {
       "enabled": true
     },
@@ -164,7 +167,10 @@
         "backend": "local"
       },
       "memory_search": {
-        "backend": "http"
+        "backend": "local"
+      },
+      "skill_search": {
+        "backend": "local"
       },
       "read_file": {
         "backend": "local"

@@ -127,6 +127,7 @@ type ToolBackendOverride struct {
 type Config struct {
 	API          APIConfig `json:"api"`
 	WorkspaceDir string    `json:"workspace_dir"`
+	MemoryDir    string    `json:"memory_dir"`
 	UseMock      bool      `json:"use_mock"`
 	Prompts      struct {
 		SystemPath string `json:"system_path"`
@@ -208,6 +209,9 @@ func LoadConfig(repoRoot, configPath string) (*Config, error) {
 	}
 	if cfg.HistoryDir == "" {
 		cfg.HistoryDir = "runs"
+	}
+	if cfg.MemoryDir == "" {
+		cfg.MemoryDir = "memory"
 	}
 	return &cfg, nil
 }

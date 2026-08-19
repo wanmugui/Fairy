@@ -22,6 +22,7 @@ type ReadablePathRoot string
 const (
 	ReadablePathWorkspace ReadablePathRoot = "workspace"
 	ReadablePathSkills    ReadablePathRoot = "skills"
+	ReadablePathMemory   ReadablePathRoot = "memory"
 )
 
 func ContextForInvocation(invocation dtypes.ToolInvocation) (ToolContext, error) {
@@ -102,8 +103,13 @@ func ResolveWorkspacePath(workspace, requested string) (string, error) {
 //   - `local://...` accepts both virtual roots plus workspace-relative.
 //   - Other absolute paths are accepted unchanged; the bash policy layer
 //     is responsible for blocking destructive operations.
-//   - `memory://` / `knowledge://` remain unsupported by this local backend.
+//   - `memory://` maps to the configured local memory root.
+//   - `knowledge://` remains unsupported by this local backend.
 func ResolveReadablePath(workspace, skillsRoot, requested string) (string, ReadablePathRoot, error) {
+	return ResolveReadablePathWithMemory(workspace, skillsRoot, "", requested)
+}
+
+func ResolveReadablePathWithMemory(workspace, skillsRoot, memoryRoot, requested string) (string, ReadablePathRoot, error) {
 	raw := strings.TrimSpace(requested)
 	if raw == "" {
 		return "", "", fmt.Errorf("path is required")
@@ -112,8 +118,18 @@ func ResolveReadablePath(workspace, skillsRoot, requested string) (string, Reada
 	lower := strings.ToLower(raw)
 	hasLocalScheme := false
 	switch {
-	case strings.HasPrefix(lower, "memory://"), strings.HasPrefix(lower, "knowledge://"):
-		return "", "", fmt.Errorf("path %q uses an unsupported filesystem; this local runtime supports only local:// workspace files and bundled skills", requested)
+	case strings.HasPrefix(lower, "knowledge://"):
+		return "", "", fmt.Errorf("path %q uses an unsupported filesystem; this local runtime supports only local:// workspace files, memory:// memories, and bundled skills", requested)
+	case strings.HasPrefix(lower, "memory://"):
+		if strings.TrimSpace(memoryRoot) == "" {
+			return "", "", fmt.Errorf("path %q refers to local memory, but no memory directory is configured", requested)
+		}
+		raw = strings.TrimLeft(raw[len("memory://"):], "/")
+		fullPath, err := resolvePathWithinRoot(memoryRoot, raw)
+		if err != nil {
+			return "", "", err
+		}
+		return fullPath, ReadablePathMemory, nil
 	case strings.HasPrefix(lower, "local://"):
 		raw = raw[len("local://"):]
 		hasLocalScheme = true
@@ -211,6 +227,18 @@ func RelativePath(workspace, fullPath string) string {
 		return filepath.ToSlash(fullPath)
 	}
 	return filepath.ToSlash(relative)
+}
+
+func ResolveMemoryPath(memoryRoot, requested string) (string, error) {
+	lower := strings.ToLower(strings.TrimSpace(requested))
+	if !strings.HasPrefix(lower, "memory://") {
+		return "", fmt.Errorf("path %q does not use memory://", requested)
+	}
+	if strings.TrimSpace(memoryRoot) == "" {
+		return "", fmt.Errorf("memory root is not configured")
+	}
+	raw := strings.TrimLeft(strings.TrimSpace(requested)[len("memory://"):], "/")
+	return resolvePathWithinRoot(memoryRoot, raw)
 }
 
 func ErrorResult(toolName string, err error) dtypes.ToolResult {

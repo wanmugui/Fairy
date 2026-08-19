@@ -20,16 +20,17 @@ func builtinLocalToolBuilders() map[string]LocalToolBuilder {
 				SegmentReadMinTokens: cfg.Tools.ReadFile.SegmentReadMinTokens,
 				MaxReadFileSizeBytes: cfg.Tools.ReadFile.MaxReadFileSizeBytes,
 				SkillsRoot:           configuredSkillsRoot(cfg),
+				MemoryRoot:           configuredMemoryRoot(cfg),
 			}), nil
 		},
-		"write_file": func(schema ToolDef, _ *Config) (Tool, error) {
-			return builtin.NewLocalWriteFileTool(schema), nil
+		"write_file": func(schema ToolDef, cfg *Config) (Tool, error) {
+			return builtin.NewLocalWriteFileToolWithConfig(schema, builtin.WritableFileToolConfig{MemoryRoot: configuredMemoryRoot(cfg)}), nil
 		},
-		"edit_file": func(schema ToolDef, _ *Config) (Tool, error) {
-			return builtin.NewLocalEditFileTool(schema), nil
+		"edit_file": func(schema ToolDef, cfg *Config) (Tool, error) {
+			return builtin.NewLocalEditFileToolWithConfig(schema, builtin.WritableFileToolConfig{MemoryRoot: configuredMemoryRoot(cfg)}), nil
 		},
 		"glob": func(schema ToolDef, cfg *Config) (Tool, error) {
-			return builtin.NewLocalGlobToolWithConfig(schema, configuredSkillsRoot(cfg)), nil
+			return builtin.NewLocalGlobToolWithConfigAndMemory(schema, configuredSkillsRoot(cfg), configuredMemoryRoot(cfg)), nil
 		},
 		"grep": func(schema ToolDef, _ *Config) (Tool, error) {
 			return builtin.NewLocalGrepTool(schema), nil
@@ -51,6 +52,12 @@ func builtinLocalToolBuilders() map[string]LocalToolBuilder {
 		},
 		"ask_user": func(schema ToolDef, _ *Config) (Tool, error) {
 			return builtin.NewLocalAskUserTool(schema), nil
+		},
+		"skill_search": func(schema ToolDef, cfg *Config) (Tool, error) {
+			return builtin.NewLocalSkillSearchTool(schema, configuredSkillsRoot(cfg)), nil
+		},
+		"memory_search": func(schema ToolDef, cfg *Config) (Tool, error) {
+			return builtin.NewLocalMemorySearchTool(schema, configuredMemoryRoot(cfg)), nil
 		},
 		"create_subtask": func(schema ToolDef, cfg *Config) (Tool, error) {
 			return localtool.NewLocalCreateSubtaskTool(schema, localToolConfig(cfg)), nil
@@ -81,6 +88,13 @@ func configuredSkillsRoot(cfg *Config) string {
 		return ""
 	}
 	return cfg.ResolvePath(cfg.SkillsDir)
+}
+
+func configuredMemoryRoot(cfg *Config) string {
+	if cfg == nil || strings.TrimSpace(cfg.MemoryDir) == "" {
+		return ""
+	}
+	return cfg.ResolvePath(cfg.MemoryDir)
 }
 
 func localToolConfig(cfg *Config) *localtool.Config {
@@ -138,7 +152,7 @@ func renderLocalSubtaskPrompt(cfg *Config, task string) (string, error) {
 	if template == "" {
 		return task + "\n\n请根据上面的被委派任务执行工作，完成后在 <subtask_result> 中输出结果。", nil
 	}
-	vars := systemTemplateVars(cfg, buildSkillRegistryJSON(cfg.Skills))
+	vars := systemTemplateVars(cfg, buildMergedSkillRegistryJSON(cfg))
 	vars["Task"] = task
 	rendered, err := renderJinja(template, vars)
 	if err != nil {

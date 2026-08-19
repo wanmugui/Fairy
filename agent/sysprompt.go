@@ -19,7 +19,7 @@ func BuildSystemPrompt(cfg *Config) string {
 	if tmpl == "" {
 		tmpl = "You are a helpful assistant."
 	}
-	registryJSON := buildSkillRegistryJSON(cfg.Skills)
+	registryJSON := buildMergedSkillRegistryJSON(cfg)
 	rendered, err := renderJinja(tmpl, systemTemplateVars(cfg, registryJSON))
 	if err != nil {
 		// Never send raw template tags to the model; degrade by removing them.
@@ -57,9 +57,9 @@ func systemTemplateVars(cfg *Config, registryJSON string) map[string]any {
 		"enable_create_subtask":          tool("create_subtask"),
 		"enable_reflection":              tool("reflection"),
 		"enable_memory_search":           tool("memory_search"),
-		"enable_memory":                  false,
-		"enable_skill_registry":          len(cfg.Skills) > 0,
-		"enable_date_memory":             false,
+		"enable_memory":                  tool("memory_search"),
+		"enable_skill_registry":          registryJSON != "[]",
+		"enable_date_memory":             tool("memory_search"),
 		"enable_os_mac_linux":            false,
 		"enable_result_dir":              true,
 		"enable_agent_file_allow_list":   false,
@@ -67,8 +67,8 @@ func systemTemplateVars(cfg *Config, registryJSON string) map[string]any {
 		"max_consecutive_web_tool_calls": 10,
 		"CURRENT_TIME":                   time.Now().Format("2006-01-02 15:04:05 -07:00"),
 		"SKILL_REGISTRY_JSON":            registryJSON,
-		"LONG_TERM_MEMORY":               "",
-		"USER_PROFILE":                   "",
+		"LONG_TERM_MEMORY":               readMemoryFileCapped(configuredMemoryRoot(cfg), "memory.md", 6000),
+		"USER_PROFILE":                   readMemoryFileCapped(configuredMemoryRoot(cfg), "user.md", 3000),
 		"LONG_TERM_MEMORY_PATH":          "memory://memory.md",
 		"USER_PROFILE_PATH":              "memory://user.md",
 	}
@@ -87,7 +87,26 @@ func buildSkillRegistryJSON(skills []SkillReg) string {
 	return string(b)
 }
 
+func buildMergedSkillRegistryJSON(cfg *Config) string {
+	if cfg == nil {
+		return "[]"
+	}
+	return buildSkillRegistryJSON(mergeSkillRegistries(cfg.Skills, DiscoverSkillRegistry(configuredSkillsRoot(cfg))))
+}
+
 // ReadTextFile reads a UTF-8 file, strips BOM, returns content or empty
+
+func readMemoryFileCapped(memoryRoot, name string, maxRunes int) string {
+	if strings.TrimSpace(memoryRoot) == "" {
+		return ""
+	}
+	content := readTextFile(filepath.Join(memoryRoot, name))
+	runes := []rune(content)
+	if len(runes) > maxRunes {
+		content = string(runes[:maxRunes])
+	}
+	return content
+}
 func readTextFile(path string) string {
 	if path == "" {
 		return ""

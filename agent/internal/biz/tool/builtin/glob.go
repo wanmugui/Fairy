@@ -14,6 +14,10 @@ func NewLocalGlobTool(schema ToolDef) Tool {
 }
 
 func NewLocalGlobToolWithConfig(schema ToolDef, skillsRoot string) Tool {
+	return NewLocalGlobToolWithConfigAndMemory(schema, skillsRoot, "")
+}
+
+func NewLocalGlobToolWithConfigAndMemory(schema ToolDef, skillsRoot, memoryRoot string) Tool {
 	return newLocalStructuredTool("glob", schema, func(ctx context.Context, invocation ToolInvocation) (ToolResult, error) {
 		if err := ctx.Err(); err != nil {
 			return ToolResult{}, err
@@ -34,7 +38,7 @@ func NewLocalGlobToolWithConfig(schema ToolDef, skillsRoot string) Tool {
 		if searchRoot == "" {
 			searchRoot = "."
 		}
-		root, rootKind, err := resolveLocalReadablePath(localContext.Workspace, skillsRoot, searchRoot)
+		root, rootKind, err := resolveLocalReadablePathWithMemory(localContext.Workspace, skillsRoot, memoryRoot, searchRoot)
 		if err != nil {
 			return localErrorResult("glob", err), nil
 		}
@@ -43,7 +47,7 @@ func NewLocalGlobToolWithConfig(schema ToolDef, skillsRoot string) Tool {
 			return localErrorResult("glob", err), nil
 		}
 		for index, match := range matches {
-			matches[index] = localReadableResultPath(rootKind, localContext.Workspace, skillsRoot, match)
+			matches[index] = localReadableResultPathWithMemory(rootKind, localContext.Workspace, skillsRoot, memoryRoot, match)
 		}
 		return ToolResult{Value: map[string]any{
 			"ok":      true,

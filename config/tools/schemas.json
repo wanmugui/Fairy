@@ -302,7 +302,7 @@
   },
   "glob": {
     "name": "glob",
-    "description": "Find files by glob pattern under the local workspace or the bundled read-only skills directory. memory:// and knowledge:// are not implemented by this local runtime.",
+    "description": "Find files under the local workspace, bundled skills, or local memory. memory:// searches the local memory store; knowledge:// is not implemented by this local runtime.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -312,7 +312,7 @@
         },
         "path": {
           "type": "string",
-          "description": "Directory to search in. Omit to use the workspace. Otherwise use local://. Workspace paths may be relative (for example local://reports); bundled skills use the production-compatible local:///skills/<skill> form. The skills directory is read-only. Do not use memory:// or knowledge://."
+          "description": "Directory to search in. Omit to use the workspace. Use local:// for workspace paths (for example local://reports), local:///skills/<skill>/... for bundled skills, or memory://<path> for local memory."
         },
         "limit": {
           "type": "integer",
@@ -513,15 +513,32 @@
       ]
     }
   },
+  "skill_search": {
+    "name": "skill_search",
+    "description": "Search locally installed skills/plugins by name, description, or usage intent. Returns matching skill locations that can be read with read_file.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Optional query; empty returns all installed skills."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of results to return."
+        }
+      }
+    }
+  },
   "read_file": {
     "name": "read_file",
-    "description": "Read a text file from the local workspace or bundled read-only skills. Use local:// for workspace files and local:///skills/<skill>/... for Skill files. memory:// and knowledge:// are not implemented by this local runtime and must not be used.",
+    "description": "Read a text file from the local workspace, bundled skills, or local memory. Use local:// for workspace files, local:///skills/<skill>/... for Skill files, and memory://<path> for local memory. knowledge:// is not implemented by this local runtime.",
     "parameters": {
       "type": "object",
       "properties": {
         "file_path": {
           "type": "string",
-          "description": "Path to read. It MUST start with local://. Use local:///skills/<skill>/... for bundled Skill files. Do not use memory:// or knowledge:// with this backend."
+          "description": "Path to read. Use local:// for workspace or skills files, or memory://<path> for local memory. knowledge:// is not implemented by this backend."
         },
         "offset": {
           "type": "integer",
@@ -741,13 +758,13 @@
   },
   "write_file": {
     "name": "write_file",
-    "description": "Write a local workspace file. This tool creates a new file or completely overwrites an existing file. Use a workspace-relative path or local:// path. Do not use memory:// or knowledge://. Use edit_file for incremental changes.",
+    "description": "Write a local workspace or memory file. This tool creates a new file or completely overwrites an existing file. Use a workspace-relative path, local:// path, or memory://<path>. Use edit_file for incremental changes.",
     "parameters": {
       "type": "object",
       "properties": {
         "file_path": {
           "type": "string",
-          "description": "Path to write. It MUST start with 'local://'. memory:// and knowledge:// are not supported by this backend."
+          "description": "Path to write. Use local:// for workspace files or memory://<path> for local memory. knowledge:// is not supported by this backend."
         },
         "content": {
           "type": "string",

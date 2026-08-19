@@ -5,9 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func NewLocalWriteFileTool(schema ToolDef) Tool {
+	return NewLocalWriteFileToolWithConfig(schema, WritableFileToolConfig{})
+}
+
+func NewLocalWriteFileToolWithConfig(schema ToolDef, settings WritableFileToolConfig) Tool {
 	return newLocalStructuredTool("write_file", schema, func(ctx context.Context, invocation ToolInvocation) (ToolResult, error) {
 		if err := ctx.Err(); err != nil {
 			return ToolResult{}, err
@@ -24,7 +29,7 @@ func NewLocalWriteFileTool(schema ToolDef) Tool {
 		if err != nil {
 			return localErrorResult("write_file", err), nil
 		}
-		fullPath, err := resolveLocalWorkspacePath(localContext.Workspace, filePath)
+		fullPath, err := resolveLocalWritablePath(localContext.Workspace, settings.MemoryRoot, filePath)
 		if err != nil {
 			return localErrorResult("write_file", err), nil
 		}
@@ -35,7 +40,13 @@ func NewLocalWriteFileTool(schema ToolDef) Tool {
 		if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
 			return localErrorResult("write_file", fmt.Errorf("write error: %w", err)), nil
 		}
-		result := map[string]any{"ok": true, "path": localRelativePath(localContext.Workspace, fullPath), "size": len(content)}
+		resultPath := localRelativePath(localContext.Workspace, fullPath)
+		if strings.HasPrefix(strings.ToLower(filePath), "memory://") {
+			if relative, relErr := filepath.Rel(settings.MemoryRoot, fullPath); relErr == nil {
+				resultPath = "memory://" + filepath.ToSlash(relative)
+			}
+		}
+		result := map[string]any{"ok": true, "path": resultPath, "size": len(content)}
 		if localBoolArg(args, "_truncated") {
 			result["truncated"] = true
 			result["written_bytes"] = len(content)

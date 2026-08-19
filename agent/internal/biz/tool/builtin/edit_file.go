@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -13,6 +14,10 @@ import (
 // snippet matched (or would have matched) so the model can fix typos with a
 // concrete line number rather than a bare "not found" message.
 func NewLocalEditFileTool(schema ToolDef) Tool {
+	return NewLocalEditFileToolWithConfig(schema, WritableFileToolConfig{})
+}
+
+func NewLocalEditFileToolWithConfig(schema ToolDef, settings WritableFileToolConfig) Tool {
 	return newLocalStructuredTool("edit_file", schema, func(ctx context.Context, invocation ToolInvocation) (ToolResult, error) {
 		if err := ctx.Err(); err != nil {
 			return ToolResult{}, err
@@ -33,7 +38,7 @@ func NewLocalEditFileTool(schema ToolDef) Tool {
 		if err != nil {
 			return localErrorResult("edit_file", err), nil
 		}
-		fullPath, err := resolveLocalWorkspacePath(localContext.Workspace, filePath)
+		fullPath, err := resolveLocalWritablePath(localContext.Workspace, settings.MemoryRoot, filePath)
 		if err != nil {
 			return localErrorResult("edit_file", err), nil
 		}
@@ -83,9 +88,15 @@ func NewLocalEditFileTool(schema ToolDef) Tool {
 		if !replaceAll && len(replacedAt) > 0 {
 			replacedAt = replacedAt[:1]
 		}
+		resultPath := localRelativePath(localContext.Workspace, fullPath)
+		if strings.HasPrefix(strings.ToLower(filePath), "memory://") {
+			if relative, relErr := filepath.Rel(settings.MemoryRoot, fullPath); relErr == nil {
+				resultPath = "memory://" + filepath.ToSlash(relative)
+			}
+		}
 		return ToolResult{Value: map[string]any{
 			"ok":           true,
-			"path":         localRelativePath(localContext.Workspace, fullPath),
+			"path":         resultPath,
 			"replacements": count,
 			"replaced_at":  replacedAt,
 		}}, nil

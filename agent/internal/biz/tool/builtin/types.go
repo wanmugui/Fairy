@@ -12,4 +12,9 @@ type ReadFileToolConfig struct {
 	SegmentReadMinTokens int
 	MaxReadFileSizeBytes int64
 	SkillsRoot           string
+	MemoryRoot           string
+}
+
+type WritableFileToolConfig struct {
+	MemoryRoot string
 }

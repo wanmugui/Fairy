@@ -4,6 +4,7 @@ import (
 	"agentloop/agent/internal/biz/tool/shared"
 	"context"
 	"path/filepath"
+	"strings"
 )
 
 // LocalToolContext contains the filesystem context shared by in-process tools.
@@ -48,11 +49,33 @@ func resolveLocalReadablePath(workspace, skillsRoot, requested string) (string, 
 	return shared.ResolveReadablePath(workspace, skillsRoot, requested)
 }
 
+func resolveLocalReadablePathWithMemory(workspace, skillsRoot, memoryRoot, requested string) (string, shared.ReadablePathRoot, error) {
+	return shared.ResolveReadablePathWithMemory(workspace, skillsRoot, memoryRoot, requested)
+}
+
+func resolveLocalWritablePath(workspace, memoryRoot, requested string) (string, error) {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(requested)), "memory://") {
+		return shared.ResolveMemoryPath(memoryRoot, requested)
+	}
+	return resolveLocalWorkspacePath(workspace, requested)
+}
+
 func localRelativePath(workspace, fullPath string) string {
 	return shared.RelativePath(workspace, fullPath)
 }
 
 func localReadableResultPath(root shared.ReadablePathRoot, workspace, skillsRoot, fullPath string) string {
+	return localReadableResultPathWithMemory(root, workspace, skillsRoot, "", fullPath)
+}
+
+func localReadableResultPathWithMemory(root shared.ReadablePathRoot, workspace, skillsRoot, memoryRoot, fullPath string) string {
+	if root == shared.ReadablePathMemory {
+		relative, err := filepath.Rel(memoryRoot, fullPath)
+		if err != nil || relative == "." {
+			return "memory://"
+		}
+		return "memory://" + filepath.ToSlash(relative)
+	}
 	if root != shared.ReadablePathSkills {
 		return localRelativePath(workspace, fullPath)
 	}
